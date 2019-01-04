@@ -10,7 +10,7 @@ client.commands = new Discord.Collection();
 
 // Client online
 client.on("ready", () => {
-    console.log("StockBot Online");
+    console.log("StatsBot Online");
   });
 
 // Auto-reconnect
