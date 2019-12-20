@@ -10,7 +10,7 @@ client.commands = new Discord.Collection();
 
 // Client online
 client.on("ready", () => {
-    console.log("StatsBot Online");
+    console.log("EloBot Online");
   });
 
 // Auto-reconnect
