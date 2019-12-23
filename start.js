@@ -5,6 +5,7 @@ const fs = require('fs');
 const Discord = require("Discord.js");
 const client = new Discord.Client();
 const token = require("./auth.json");
+const mysql = require("mysql");
 
 client.commands = new Discord.Collection();
 
@@ -18,6 +19,18 @@ client.on('disconnect', function(erMsg, code) {
     console.log('----- client disconnected from Discord with code', code, 'for reason:', erMsg, '-----');
     client.connect();
   });
+
+var connection = mysql.createConnection({
+  host: "localhost",
+  user: "root",
+  password: "sunday21",
+  database: "ebdb"
+});
+
+connection.connect(err => {
+  if(err) throw err;
+  console.log("Connected to database");
+});
 
 // Initializing incoming commands
 client.on("message", message => {
