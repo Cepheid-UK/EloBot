@@ -42,7 +42,7 @@ client.on("message", message => {
 
   try {
     let commandFile = require(`./commands/${command}.js`);
-    commandFile.run(client, message, args);
+    commandFile.run(client, message, args, connection);
   } catch (err) {
     console.error(err);
   }
