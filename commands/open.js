@@ -6,6 +6,8 @@
 //    - discord_id char(128) NOT NULL,
 //    - time_of_challenge datetime NOT NULL);
 
+const Discord = require('discord.js')
+
 exports.run = (client, message, args, connection) => {
     
     var TIMER = 1 * 5 * 1000; // 30 minutes in milliseconds - set to 5 sec for testing
@@ -46,10 +48,29 @@ exports.run = (client, message, args, connection) => {
                     var sql_createOpenChallenge = 'INSERT INTO open_challenges (discord_id,time_of_challenge) VALUES (\'' + discord_id + '\',\'' + time_of_challenge + '\');'
                     console.log(sql_createOpenChallenge); // debugging
                     // submit the query
-                    connection.query(sql_createOpenChallenge, function (err, result) {
+                    connection.query(sql_createOpenChallenge, async function (err, result) {
                         if (err) throw err;
                         console.log('Open challenge created by ' + discord_id)
-                    })
+
+                        var embed = new Discord.RichEmbed()
+                            .setColor('#0099ff')
+                            .setTitle('Open Challenge')
+                            .setDescription('An open challenge has been issued by **' + discord_id + '** please react with :white_check_mark: if you wish to accept this open challenge')
+                            .setFooter('This message brought to you by EloBot - Created by Cepheid#6411')
+                        
+                        message.channel.send({embed}).then(sent => {
+                            //let id = sent.id;
+                            var filter = (reaction, user) => reaction.emoji.name === '✅' && user.id != sent.author.id;
+                            sent.react('✅')
+                                .then(sent.awaitReactions((reaction, user) => user.id != sent.author.id && reaction.emoji.name == '✅',
+                                    {max : 1, time: TIMER}).then(collected => {
+                                        if (collected.first().emoji.name == '✅') {
+                                            sent.reply('A challenger has accepted!');
+                                        }
+                                    })               
+                                )
+                        })
+                    })      
                 } else {
                     message.channel.send('You have an open challenge, please await a response to this challenge before opening another')
                 }

@@ -1,7 +1,3 @@
-var date = new Date()
-var dateString = date.toISOString()
+const Discord = require('discord.js')
 
-dateString = dateString.replace("Z"," ");
-dateString = dateString.replace("T"," ");
-
-console.log(dateString)
+console.log(Discord.Emoji)
