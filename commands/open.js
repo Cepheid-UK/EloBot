@@ -10,7 +10,7 @@ const Discord = require('discord.js')
 
 exports.run = (client, message, args, connection) => {
     
-    var TIMER = 1 * 5 * 1000; // 30 minutes in milliseconds - set to 5 sec for testing
+    var TIMER = 1 * 10 * 1000; // 30 minutes in milliseconds - set to 5 sec for testing
 
     var gametype = 1;
     var discord_id = message.author.tag;
@@ -30,23 +30,17 @@ exports.run = (client, message, args, connection) => {
     connection.query(sql, function (err, result) {
         if (err) throw err;
         queryResult = result
-        console.log(sql)
-        console.log(result)
-        
 
         // first check if the player has any active games
         if (queryResult.length === 0) {
             connection.query(sql_challenge, function (err, result) {
                 if (err) throw err;
-                console.log(sql_challenge)
-                console.log(result)
                 var queryResult2 = result;
                 
                 // then check if the player has any open challenges
                 if (queryResult2.length === 0) {
                     // no active games and no open challenges - create a new one
                     var sql_createOpenChallenge = 'INSERT INTO open_challenges (discord_id,time_of_challenge) VALUES (\'' + discord_id + '\',\'' + time_of_challenge + '\');'
-                    console.log(sql_createOpenChallenge); // debugging
                     // submit the query
                     connection.query(sql_createOpenChallenge, async function (err, result) {
                         if (err) throw err;
@@ -58,16 +52,33 @@ exports.run = (client, message, args, connection) => {
                             .setDescription('An open challenge has been issued by **' + discord_id + '** please react with :white_check_mark: if you wish to accept this open challenge')
                             .setFooter('This message brought to you by EloBot - Created by Cepheid#6411')
                         
-                        message.channel.send({embed}).then(sent => {
-                            //let id = sent.id;
-                            var filter = (reaction, user) => reaction.emoji.name === '✅' && user.id != sent.author.id;
+                        message.channel.send({embed}).then(sent => {                            
                             sent.react('✅')
-                                .then(sent.awaitReactions((reaction, user) => user.id != sent.author.id && reaction.emoji.name == '✅',
-                                    {max : 1, time: TIMER}).then(collected => {
-                                        if (collected.first().emoji.name == '✅') {
-                                            sent.reply('A challenger has accepted!');
-                                        }
-                                    })               
+                                .then(sent.awaitReactions((reaction, user) => user.id != sent.author.id && reaction.emoji.name == '✅' && user.tag != discord_id,
+                                    {max : 1, time: TIMER}).then(collected => {                               
+
+                                        var acceptingUser = collected.last().users.last()
+                                        var openUser = message.author
+
+                                        var activeGameEmbed = new Discord.RichEmbed()
+                                            .setColor('#0099ff')
+                                            .setTitle('Match')
+                                            .setDescription('An open challenge was issued by **' + openUser + '** and accepted by **' + acceptingUser +'**')
+                                            .setFooter('This message brought to you by EloBot - Created by Cepheid')
+
+                                        
+                                        sent.channel.send({embed: activeGameEmbed});
+                                        sent.delete()
+                                        
+                                        // ---------------------- debugging ----------------------
+                                        var sql_deleteOpenChallenge = 'DELETE FROM open_challenges;'
+                                        connection.query(sql_deleteOpenChallenge, function (err, results) {
+                                        console.log('open_challenge table data deleted')
+                                        // ---------------------- debugging end ------------------
+                                            })                                        
+
+                                        } 
+                                    )               
                                 )
                         })
                     })      
