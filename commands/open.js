@@ -21,7 +21,7 @@ exports.run = (client, message, args, connection) => {
     time_of_challenge = time_of_challenge.replace("Z","");
     time_of_challenge = time_of_challenge.replace("T"," ");
     
-    var challengeCloses = datetime.valueOf + TIMER;
+    //var challengeCloses = datetime.valueOf + TIMER;
 
     var sql_checkActiveGames = 'SELECT * FROM active_games WHERE player1=\'' + discord_id + '\' OR player2=\'' + discord_id + '\'';
     var sql_challenge = 'SELECT * FROM open_challenges WHERE discord_id=\'' + discord_id + '\'';
@@ -66,7 +66,7 @@ exports.run = (client, message, args, connection) => {
                                         sql_mapSelection = 'SELECT * FROM mappool WHERE id=' + Math.floor(Math.random()*8+1)
                                         console.log(sql_mapSelection)
 
-                                        connection.query(sql_mapSelection, function (err, result) {
+                                        connection.query(sql_mapSelection, async function (err, result) {
                                             if (err) throw err;
                                             map = [result[0].name,result[0].abbreviation]
                                             console.log(map)
@@ -78,7 +78,45 @@ exports.run = (client, message, args, connection) => {
                                             .setFooter('This message brought to you by EloBot - Created by Cepheid')
                                             .addField('Map:', map[0] + ' (' + map[1] + ')')
 
-                                            sent.channel.send({embed: activeGameEmbed});
+                                            sent.channel.send({embed: activeGameEmbed}).then(matchSent => {
+                                                matchSent.react('✅').then(matchSent.react('❌'))
+                                                    .then(matchSent.awaitReactions((reaction, user) => user.id != matchSent.author.id && (reaction.emoji.name == '✅' || reaction.emoji.name == '❌'),
+                                                    {max: 1, time: TIMER}).then(collectedMatch => {
+                                                        
+                                                        // the player who has reacted
+                                                        var reportingUser = collectedMatch.last().users.last().tag
+
+                                                        // create an array of the participating players 
+                                                        var participatingPlayers = [openUser.tag, acceptingUser.tag]
+                                                 
+                                                        console.log(participatingPlayers[0].toString())
+                                                        console.log(reportingUser)
+
+                                                        // check to see if the person reacting is one of those players
+                                                        
+                                                        if (reportingUser == openUser.tag || reportingUser == acceptingUser.tag) {
+                                                            // If you get here, it means one of the participating players has pressed ✅ or ❌ on the match embed. (Hopefully!)
+                                                            var sql_deleteActiveGamesFromMatchEmbed = 'DELETE FROM active_games WHERE player1=\'' + openUser + '\''
+                                                            connection.query(sql_deleteActiveGamesFromMatchEmbed, function (err, results) {
+                                                                if (err) throw err;
+                                                                console.log('Match concluded');
+                                                                matchSent.channel.send('Match concluded');
+                                                                })
+                                                            }
+                                                        
+                                                        
+
+                                                        // Build SQL query to delete the record from the active_games table
+                                                        // push the query.
+
+                                                        // call Elo calculation function here
+                                                        // Build SQL query here to update player table
+                                                        // push the query.
+
+                                                        // build SQL query to update completed_games table, including elo change and winner/loser
+                                                        matchSent.delete()
+                                                    }))
+                                                })
                                             sent.delete()
                                             })
 
@@ -102,15 +140,16 @@ exports.run = (client, message, args, connection) => {
                                             })                                        
                                         // ---------------------- debugging end ------------------
                                         } 
-                                    )               
+                                    )              
                                 )
-                        })
+                            })
                     })      
                 } else {
                     message.channel.send('You have an open challenge, please await a response to this challenge before opening another')
                     //message.author.send('You have an open challenge, please await a response to this challenge before opening another')
                 }
-            })
+                
+            })   
         } else {
             message.channel.send(`You have an active game currently open, please report on the result of this game to open another challenge`)
             //message.author.send(`You have an active game currently open, please report on the result of this game to open another challenge`)
