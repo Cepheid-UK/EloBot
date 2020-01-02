@@ -1,0 +1,6 @@
+{
+    "start_rating": 1500,
+    "const_alpha": 10,
+    "const_beta": 400,
+    "const_kappa": 32
+}
