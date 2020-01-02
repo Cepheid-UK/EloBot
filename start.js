@@ -1,4 +1,4 @@
-///// ----- StockBot Command Handler ----- /////
+///// ----- EloBot Command Handler ----- /////
 
 const prefix = ('!');
 const fs = require('fs');
