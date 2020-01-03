@@ -1,1 +1,3 @@
-console.log(Math.floor(Math.random()*8+1))
+const elo = require('./util/calculate_elo.js')
+
+console.log(elo.calculateElo(1500,1550,1))
