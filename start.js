@@ -24,7 +24,8 @@ var connection = mysql.createConnection({
   host: "localhost",
   user: "root",
   password: "sunday21",
-  database: "ebdb"
+  database: "ebdb",
+  multipleStatements: "true"
 });
 
 connection.connect(err => {

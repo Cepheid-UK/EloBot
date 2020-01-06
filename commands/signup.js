@@ -6,7 +6,6 @@ exports.run = (client, message, args, dbConnection) => {
 
   // build sql query string
   var sql = 'SELECT * FROM players WHERE discord_id=\'' + discordUser + '\''// WHERE discord_id LIKE' + discordUserQuery
-  console.log(sql)
   var queryResult;
 
   // query DB for discord_id matching an existing record
@@ -20,7 +19,7 @@ exports.run = (client, message, args, dbConnection) => {
         message.reply(`Welcome to the EloBot ladder`);
         
         // build sql for inserting player into DB
-        var sqlInsert = 'INSERT INTO players (Elo, Discord_Id) VALUES (1600,';
+        var sqlInsert = 'INSERT INTO players (Elo, Discord_Id) VALUES (1500,';
         sqlInsert += '\'' + discordUser + '\')'
 
         dbConnection.query(sqlInsert) // add player to DB
