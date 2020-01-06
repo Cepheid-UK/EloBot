@@ -49,8 +49,8 @@ exports.run = (client, message, args, connection) => {
                             .setDescription('An open challenge has been issued by **' + discord_id + '** please react with :white_check_mark: if you wish to accept this open challenge')
                             .setFooter('This message brought to you by EloBot - Created by Cepheid#6411')
                         
-                        message.channel.send({embed}).then(sent => {                            
-                            sent.react('✅')
+                        message.channel.send({embed})
+                            .then(sent => sent.react('✅')
                                 .then(sent.awaitReactions((reaction, user) => user.id != sent.author.id && reaction.emoji.name == '✅' && user.tag != discord_id,
                                     {max: 1, time: CHALLENGE_TIMER}).then(collected => {                               
 
@@ -129,7 +129,8 @@ exports.run = (client, message, args, connection) => {
                                                                         }
                                                                     }
 
-                                                                    // calculate elo
+                                                                    // calculate elo change
+                                                                    // must be in two queries for security (no multiple lines of sql)
                                                                     var newElos = Elo.calculateElo(elos[0], elos[1], winner)
 
                                                                     var sql_submitNewElos1 = 'UPDATE players '
@@ -140,6 +141,7 @@ exports.run = (client, message, args, connection) => {
                                                                                             +'SET Elo=\'' + newElos[1] + '\' ' 
                                                                                             +'WHERE Discord_Id=\'' + participatingPlayers[1] + '\';'
                                                                     
+                                                                    // submit results
                                                                     connection.query(sql_submitNewElos1, function (err, results) {
                                                                         if (err) throw err;
                                                                         connection.query(sql_submitNewElos2, function (err, results) {
@@ -152,28 +154,10 @@ exports.run = (client, message, args, connection) => {
                                                             var sql_deleteActiveGamesFromMatchEmbed = 'DELETE FROM active_games WHERE player1=\'' + openUser.tag + '\''
                                                             connection.query(sql_deleteActiveGamesFromMatchEmbed, function (err, results) {
                                                                 if (err) throw err;
-                                                                // TO-DO:
-                                                                // detect if the player clicked ✅ or ❌ with collectedMatch.last().emoji.name
-                                                                // if it's a win, do the elo calculation with that winner
-
-                                                                
-
-                                                                
-
                                                                 matchSent.channel.send('Match concluded');
                                                                 })
                                                             }
-                                                        
-                                                        
 
-                                                        // Build SQL query to delete the record from the active_games table
-                                                        // push the query.
-
-                                                        // call Elo calculation function here
-                                                        // Build SQL query here to update player table
-                                                        // push the query.
-
-                                                        // build SQL query to update completed_games table, including elo change and winner/loser
                                                         matchSent.delete()
                                                     }).catch(err => {
                                                         matchSent.delete()
@@ -215,7 +199,8 @@ exports.run = (client, message, args, connection) => {
 
                                     })   
                                 ) 
-                            })
+                            //}
+                            )
                     })      
                 } else {
                     message.channel.send('You have an open challenge, please await a response to this challenge before opening another')
