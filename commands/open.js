@@ -1,18 +1,15 @@
 // command for starting an open challenge
 
-// DB has 4 columns:
-//    - id bigint NOT NULL PRIMARY KEY AUTO_INCREMENT,
-//    - gametype int NOT NULL DEFAULT "1",
-//    - discord_id char(128) NOT NULL,
-//    - time_of_challenge datetime NOT NULL);
+// DB has tables that are used here:
+// players, mappool, open_challenges, active_games, completed_games
 
 const Discord = require('discord.js')
 
 exports.run = (client, message, args, connection) => {
     
-    var TIMER = 1 * 10 * 1000; // 30 minutes in milliseconds - set to 5 sec for testing
+    var CHALLENGE_TIMER = 1 * 10 * 1000; // length of time an open challenge is kept open - set to 10 sec for testing
+    var GAME_TIMER = 1 * 10 * 1000; // length of time an active game is kept open - set to 10 sec for testing
 
-    var gametype = 1;
     var discord_id = message.author.tag;
     var datetime = new Date();
     var time_of_challenge = datetime.toISOString();
@@ -55,7 +52,7 @@ exports.run = (client, message, args, connection) => {
                         message.channel.send({embed}).then(sent => {                            
                             sent.react('✅')
                                 .then(sent.awaitReactions((reaction, user) => user.id != sent.author.id && reaction.emoji.name == '✅' && user.tag != discord_id,
-                                    {max : 1, time: TIMER}).then(collected => {                               
+                                    {max: 1, time: CHALLENGE_TIMER}).then(collected => {                               
 
                                         var acceptingUser = collected.last().users.last()
                                         var openUser = message.author
@@ -81,13 +78,15 @@ exports.run = (client, message, args, connection) => {
                                             sent.channel.send({embed: activeGameEmbed}).then(matchSent => {
                                                 matchSent.react('✅').then(matchSent.react('❌'))
                                                     .then(matchSent.awaitReactions((reaction, user) => user.id != matchSent.author.id && (reaction.emoji.name == '✅' || reaction.emoji.name == '❌'),
-                                                    {max: 1, time: TIMER}).then(collectedMatch => {
+                                                    {max: 1, time: GAME_TIMER}).then(collectedMatch => {
                                                         
                                                         // the player who has reacted
                                                         var reportingUser = collectedMatch.last().users.last().tag
 
                                                         // create an array of the participating players 
                                                         var participatingPlayers = [openUser.tag, acceptingUser.tag]
+
+                                                        
                                                  
                                                         console.log(participatingPlayers[0].toString())
                                                         console.log(reportingUser)
@@ -99,6 +98,9 @@ exports.run = (client, message, args, connection) => {
                                                             var sql_deleteActiveGamesFromMatchEmbed = 'DELETE FROM active_games WHERE player1=\'' + openUser + '\''
                                                             connection.query(sql_deleteActiveGamesFromMatchEmbed, function (err, results) {
                                                                 if (err) throw err;
+                                                                // TO-DO:
+                                                                // detect if the player clicked ✅ or ❌ with collectedMatch.last().emoji.name
+                                                                // if it's a win, do the elo calculation with that winner
                                                                 console.log('Match concluded');
                                                                 matchSent.channel.send('Match concluded');
                                                                 })
@@ -115,6 +117,14 @@ exports.run = (client, message, args, connection) => {
 
                                                         // build SQL query to update completed_games table, including elo change and winner/loser
                                                         matchSent.delete()
+                                                    }).catch(err => {
+                                                        matchSent.delete()
+                                                        var sql_deleteActiveGamesFromMatchEmbed = 'DELETE FROM active_games WHERE player1=\'' + openUser + '\''
+                                                        connection.query(sql_deleteActiveGamesFromMatchEmbed, function (err, results) {
+                                                            console.log('active_games table data deleted')
+                                                            matchSent.channel.send('No response in time, match was deleted')
+                                                            })
+                                                        
                                                     }))
                                                 })
                                             sent.delete()
@@ -140,8 +150,16 @@ exports.run = (client, message, args, connection) => {
                                             })                                        
                                         // ---------------------- debugging end ------------------
                                         } 
-                                    )              
-                                )
+                                    ).catch(err => {
+                                        sent.delete()
+                                        var sql_deleteOpenChallenge = 'DELETE FROM open_challenges;'
+                                        connection.query(sql_deleteOpenChallenge, function (err, results) {
+                                            console.log('open_challenge table data deleted')
+                                            sent.channel.send('No response to the open challenge, challenge was deleted')
+                                            })
+
+                                    })   
+                                ) 
                             })
                     })      
                 } else {
