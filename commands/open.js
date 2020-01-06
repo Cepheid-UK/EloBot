@@ -81,26 +81,39 @@ exports.run = (client, message, args, connection) => {
                                                     {max: 1, time: GAME_TIMER}).then(collectedMatch => {
                                                         
                                                         // the player who has reacted
-                                                        var reportingUser = collectedMatch.last().users.last().tag
+                                                        var reportingUser = collectedMatch.last().users.last()
+                                                        
 
                                                         // create an array of the participating players 
                                                         var participatingPlayers = [openUser.tag, acceptingUser.tag]
 
-                                                        
-                                                 
-                                                        console.log(participatingPlayers[0].toString())
-                                                        console.log(reportingUser)
-
                                                         // check to see if the person reacting is one of those players
                                                         
-                                                        if (reportingUser == openUser.tag || reportingUser == acceptingUser.tag) {
+                                                        if (reportingUser.tag == openUser.tag || reportingUser == acceptingUser.tag) {
                                                             // If you get here, it means one of the participating players has pressed ✅ or ❌ on the match embed. (Hopefully!)
+
+                                                            // TO-DO:
+                                                            // create sql query that gets the current elo rating of both players from the 'players' table
+
+                                                            var sql_getPlayerElos = 'SELECT'
+
+                                                            // working area
+
+
                                                             var sql_deleteActiveGamesFromMatchEmbed = 'DELETE FROM active_games WHERE player1=\'' + openUser + '\''
                                                             connection.query(sql_deleteActiveGamesFromMatchEmbed, function (err, results) {
                                                                 if (err) throw err;
                                                                 // TO-DO:
                                                                 // detect if the player clicked ✅ or ❌ with collectedMatch.last().emoji.name
                                                                 // if it's a win, do the elo calculation with that winner
+
+                                                                var response = collectedMatch.last().emoji.name
+                                                                
+                                                                if (response == ✅) {
+                                                                    // reportingUser won!
+                                                                    
+                                                                })
+
                                                                 console.log('Match concluded');
                                                                 matchSent.channel.send('Match concluded');
                                                                 })
