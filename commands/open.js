@@ -31,7 +31,7 @@ exports.run = (client, message, args, connection) => {
 
         // first check if the player has any active games
         if (queryResult.length === 0) {
-            connection.query(sql_challenge, function (err, result) {
+            connection.query(sql_challenge, async function (err, result) {
                 if (err) throw err;
                 var queryResult2 = result;
                 
@@ -40,7 +40,7 @@ exports.run = (client, message, args, connection) => {
                     // no active games and no open challenges - create a new one
                     var sql_createOpenChallenge = 'INSERT INTO open_challenges (discord_id,time_of_challenge) VALUES (\'' + discord_id + '\',\'' + time_of_challenge + '\');'
                     // submit the query
-                    connection.query(sql_createOpenChallenge, function (err, result) {
+                    connection.query(sql_createOpenChallenge, async function (err, result) {
                         if (err) throw err;
 
                         var embed = new Discord.RichEmbed()
@@ -49,127 +49,144 @@ exports.run = (client, message, args, connection) => {
                             .setDescription('An open challenge has been issued by **' + discord_id + '** please react with :white_check_mark: if you wish to accept this open challenge')
                             .setFooter('This message brought to you by EloBot - Created by Cepheid#6411')
                         
-                        message.channel.send({embed})
-                            .then(sent => sent.react('✅')
-                                .then(sent.awaitReactions((reaction, user) => user.id != sent.author.id && reaction.emoji.name == '✅' && user.tag != discord_id,
-                                    {max: 1, time: CHALLENGE_TIMER}).then(collected => {                               
+                        let messagePromise = await message.channel.send({embed}).then(challengeEmbed => challengeEmbed.react('✅'))
+                        var sentEmbedMessage = messagePromise.message
+                        let sentEmbedReaction = await sentEmbedMessage.awaitReactions((reaction, user) => 
+                        user.id != sentEmbedMessage.author.id && reaction.emoji.name == '✅' && user.tag != discord_id, {max: 1, time: CHALLENGE_TIMER}).then(collected => {
 
-                                        var acceptingUser = collected.last().users.last()
-                                        var openUser = message.author
+                                var acceptingUser = collected.last().users.last()
+                                var openUser = message.author
 
-                                        var map;
+                                var map;
 
-                                        // select a number between 1-8 for the map
-                                        sql_mapSelection = 'SELECT * FROM mappool WHERE id=' + Math.floor(Math.random()*8+1)
+                                // select a number between 1-8 for the map
+                                sql_mapSelection = 'SELECT * FROM mappool WHERE id=' + Math.floor(Math.random()*8+1)
 
-                                        connection.query(sql_mapSelection, function (err, result) {
-                                            if (err) throw err;
-                                            map = [result[0].name,result[0].abbreviation]
+                                connection.query(sql_mapSelection, async function (err, result) {
+                                    if (err) throw err;
 
-                                            var activeGameEmbed = new Discord.RichEmbed()
-                                            .setColor('#0099ff')
-                                            .setTitle('Match')
-                                            .setDescription(' **' + openUser + '** Vs **' + acceptingUser +'**')
-                                            .setFooter('This message brought to you by EloBot - Created by Cepheid')
-                                            .addField('Map:', map[0] + ' (' + map[1] + ')')
+                                    // record the map the query returns
+                                    map = [result[0].name,result[0].abbreviation]
 
-                                            sent.channel.send({embed: activeGameEmbed}).then(matchSent => {
-                                                matchSent.react('✅').then(matchSent.react('❌'))
-                                                    .then(matchSent.awaitReactions((reaction, user) => user.id != matchSent.author.id && (reaction.emoji.name == '✅' || reaction.emoji.name == '❌'),
-                                                    {max: 1, time: GAME_TIMER}).then(collectedMatch => {
-                                                        
-                                                        // the player who has reacted
-                                                        var reportingUser = collectedMatch.last().users.last()
+                                    // build the active game embed (this could be made into a function for easier reading)
+                                    var activeGameEmbed = new Discord.RichEmbed()
+                                    .setColor('#0099ff')
+                                    .setTitle('Match')
+                                    .setDescription(' **' + openUser + '** Vs **' + acceptingUser +'**')
+                                    .setFooter('This message brought to you by EloBot - Created by Cepheid')
+                                    .addField('Map:', map[0] + ' (' + map[1] + ')')
 
-                                                        // create an array of the participating players 
-                                                        var participatingPlayers = [openUser.tag, acceptingUser.tag]
+                                    // create the embed
+                                    let sentMatchEmbed = await sentEmbedMessage.channel.send({embed: activeGameEmbed})
+                                    
+                                    // give reactions for players to click on
+                                    await sentMatchEmbed.react('✅')
+                                    await sentMatchEmbed.react('❌')
+                                    
+                                    // create the filter which determines what conditions the awaitReactions should run
+                                    //var matchFilter = (reaction, user) => user.id != sentMatchEmbed.author.id && (reaction.emoji.name == '✅' || reaction.emoji.name == '❌')
+                                    
+                                    // awaitReactions with the conditions, max: 1 only waits for one response that matches the conditions, times out after GAME_TIMER seconds
+                                    await sentMatchEmbed.awaitReactions((reaction, user) => user.id != sentMatchEmbed.author.id && (reaction.emoji.name == '✅' || reaction.emoji.name == '❌'), {max: 1, time: GAME_TIMER}).then(collectedMatch => {
 
-                                                        // check to see if the person reacting is one of those players
-                                                        if (reportingUser.tag == participatingPlayers[0] || reportingUser == participatingPlayers[1]) {
-                                                            
-                                                            // If you get here, it means one of the participating players has pressed ✅ or ❌ on the match embed. (Hopefully!)
-                                                            
-                                                            
-                                                            // create the sql queries to get the current elos of the participating players
-                                                            
-                                                            var sql_retreivePlayer1Elo = 'SELECT Elo FROM players WHERE Discord_Id=\'' + participatingPlayers[0] + '\''
-                                                            var sql_retreivePlayer2Elo = 'SELECT Elo FROM players WHERE Discord_Id=\'' + participatingPlayers[1] + '\''
-                                                            
-                                                            // query the sqls
-                                                            connection.query(sql_retreivePlayer1Elo, function(err, results) {
-                                                                
-                                                                // add first player's elo to results array 'elos'
-                                                                var elos = []
-                                                                elos.push(results[0].Elo)
+                                        console.log('inside awaitReactions')
 
-                                                                connection.query(sql_retreivePlayer2Elo, function (err, results) {
-                                                                    // get the second player's elo
-                                                                    elos.push(results[0].Elo)
-                                                                    console.log(elos)
-                                                                    
-                                                                    // get the response to see if the reporting player reported a win or loss
-                                                                    var response = collectedMatch.last().emoji.name
-                                                                    
-                                                                    var winner
+                                        var reportingUser = collectedMatch.last().users.last()
 
-                                                                    // see if the response was a win or a loss
-                                                                    if (response === '✅') {
-                                                                        // reportingUser won
-                                                                        if (reportingUser.tag === participatingPlayers[0]) {
-                                                                            winner = 1
-                                                                        } else {
-                                                                            winner = 0
-                                                                        }
-                                                                    } else if (response === '❌') {
-                                                                        // reportingUser lost
-                                                                        if (reportingUser.tag === participatingPlayers[0]) {
-                                                                            winner = 0
-                                                                        } else {
-                                                                            winner = 1
-                                                                        }
-                                                                    }
+                                        // create an array of the participating players 
+                                        var participatingPlayers = [openUser.tag, acceptingUser.tag]
+                                    
+                                                                                        
+                                        // the player who has reacted
+                                        var reportingUser = collectedMatch.last().users.last()
 
-                                                                    // calculate elo change
-                                                                    // must be in two queries for security (no multiple lines of sql)
-                                                                    var newElos = Elo.calculateElo(elos[0], elos[1], winner)
+                                                
 
-                                                                    var sql_submitNewElos1 = 'UPDATE players '
-                                                                                            +'SET Elo=\'' + newElos[0] + '\' '
-                                                                                            +'WHERE Discord_Id=\'' + participatingPlayers[0] + '\''
-                                                                    
-                                                                    var sql_submitNewElos2 = 'UPDATE players '
-                                                                                            +'SET Elo=\'' + newElos[1] + '\' ' 
-                                                                                            +'WHERE Discord_Id=\'' + participatingPlayers[1] + '\';'
-                                                                    
-                                                                    // submit results
-                                                                    connection.query(sql_submitNewElos1, function (err, results) {
-                                                                        if (err) throw err;
-                                                                        connection.query(sql_submitNewElos2, function (err, results) {
-                                                                            if (err) throw err;
-                                                                        })
-                                                                    })
-                                                                })
-                                                            })
+                                        // check to see if the person reacting is one of those players
+                                        if (reportingUser.tag == participatingPlayers[0] || reportingUser == participatingPlayers[1]) {
+                                            
+                                            // If you get here, it means one of the participating players has pressed ✅ or ❌ on the match embed. (Hopefully!)
+                                            
+                                            
+                                            // create the sql queries to get the current elos of the participating players
+                                            
+                                            var sql_retreivePlayer1Elo = 'SELECT Elo FROM players WHERE Discord_Id=\'' + participatingPlayers[0] + '\''
+                                            var sql_retreivePlayer2Elo = 'SELECT Elo FROM players WHERE Discord_Id=\'' + participatingPlayers[1] + '\''
+                                            
+                                            // query the sqls
+                                            connection.query(sql_retreivePlayer1Elo, function(err, results) {
+                                                
+                                                // add first player's elo to results array 'elos'
+                                                var elos = []
+                                                elos.push(results[0].Elo)
 
-                                                            var sql_deleteActiveGamesFromMatchEmbed = 'DELETE FROM active_games WHERE player1=\'' + openUser.tag + '\''
-                                                            connection.query(sql_deleteActiveGamesFromMatchEmbed, function (err, results) {
-                                                                if (err) throw err;
-                                                                matchSent.channel.send('Match concluded');
-                                                                })
-                                                            }
+                                                connection.query(sql_retreivePlayer2Elo, function (err, results) {
+                                                    // get the second player's elo
+                                                    elos.push(results[0].Elo)
+                                                    console.log(elos)
+                                                    
+                                                    // get the response to see if the reporting player reported a win or loss
+                                                    var response = collectedMatch.last().emoji.name
+                                                    
+                                                    var winner
 
-                                                        matchSent.delete()
-                                                    }).catch(err => {
-                                                        matchSent.delete()
-                                                        var sql_deleteActiveGamesFromMatchEmbed = 'DELETE FROM active_games WHERE player1=\'' + openUser + '\''
-                                                        connection.query(sql_deleteActiveGamesFromMatchEmbed, function (err, results) {
-                                                            matchSent.channel.send('No response in time, match was deleted')
-                                                            })
-                                                        
-                                                    }))
+                                                    // see if the response was a win or a loss
+                                                    if (response === '✅') {
+                                                        // reportingUser won
+                                                        if (reportingUser.tag === participatingPlayers[0]) {
+                                                            winner = 1
+                                                        } else {
+                                                            winner = 0
+                                                        }
+                                                    } else if (response === '❌') {
+                                                        // reportingUser lost
+                                                        if (reportingUser.tag === participatingPlayers[0]) {
+                                                            winner = 0
+                                                        } else {
+                                                            winner = 1
+                                                        }
+                                                    }
+
+                                                    // calculate elo change
+                                                    // must be in two queries for security (no multiple lines of sql)
+                                                    var newElos = Elo.calculateElo(elos[0], elos[1], winner)
+                                                    console.log(newElos)
+                                                    var sql_submitNewElos1 = 'UPDATE players '
+                                                                            +'SET Elo=\'' + newElos[0] + '\' '
+                                                                            +'WHERE Discord_Id=\'' + participatingPlayers[0] + '\''
+                                                    
+                                                    var sql_submitNewElos2 = 'UPDATE players '
+                                                                            +'SET Elo=\'' + newElos[1] + '\' ' 
+                                                                            +'WHERE Discord_Id=\'' + participatingPlayers[1] + '\';'
+                                                    
+                                                    // submit results
+                                                    connection.query(sql_submitNewElos1, function (err, results) {
+                                                        if (err) throw err;
+                                                        connection.query(sql_submitNewElos2, function (err, results) {
+                                                            if (err) throw err;
+                                                        })
+                                                    })
                                                 })
-                                            sent.delete()
                                             })
+
+                                            sentMatchEmbed.delete()
+
+                                            var sql_deleteActiveGamesFromMatchEmbed = 'DELETE FROM active_games WHERE player1=\'' + openUser.tag + '\''
+                                            connection.query(sql_deleteActiveGamesFromMatchEmbed, function (err, results) {
+                                                if (err) throw err;
+                                                sentMatchEmbed.channel.send('Match concluded');
+                                                })
+                                            }
+                                            }).catch(err => {
+                                                sentMatchEmbed.delete()
+                                                var sql_deleteActiveGamesFromMatchEmbed = 'DELETE FROM active_games WHERE player1=\'' + openUser + '\''
+                                                connection.query(sql_deleteActiveGamesFromMatchEmbed, function (err, results) {
+                                                    matchSent.channel.send('No response in time, match was deleted')
+                                                    })
+                                                
+                                            })
+                                        })
+                                        sentEmbedMessage.delete()
 
                                         // create and query sql to add to active games
                                         var player1 = openUser.tag
@@ -180,34 +197,20 @@ exports.run = (client, message, args, connection) => {
                                         var sql_createActiveGame = 'INSERT INTO active_games (player1, player2, time_of_challenge) VALUES (\'' + player1 + '\',\'' + player2 + '\',\'' + activeTime + '\');'
                                         connection.query(sql_createActiveGame, function (err, results) {
                                             if (err) throw err;
-                                        })
-                                        
-                                        // ---------------------- debugging ----------------------
-                                        //var sql_deleteActiveGames = 'DELETE FROM active_games;'
-                                        var sql_deleteOpenChallenge = 'DELETE FROM open_challenges;'
-                                        connection.query(sql_deleteOpenChallenge, function (err, results) {
-                                            if (err) throw err;
-                                            })                                        
-                                        // ---------------------- debugging end ------------------
-                                        } 
-                                    ).catch(err => {
-                                        sent.delete()
-                                        var sql_deleteOpenChallenge = 'DELETE FROM open_challenges;'
-                                        connection.query(sql_deleteOpenChallenge, function (err, results) {
-                                            sent.channel.send('No response to the open challenge, challenge was deleted')
                                             })
-
-                                    })   
-                                ) 
-                            //}
-                            )
-                    })      
+                                    }).catch(err => {
+                                        sentEmbedMessage.delete()
+                                        var sql_deleteOpenChallenge = 'DELETE FROM open_challenges;'
+                                        connection.query(sql_deleteOpenChallenge, function (err, results) {
+                                            sentEmbedMessage.channel.send('No response to the open challenge, challenge was deleted')
+                                            })
+                                        })
+                            })
                 } else {
-                    message.channel.send('You have an open challenge, please await a response to this challenge before opening another')
-                    //message.author.send('You have an open challenge, please await a response to this challenge before opening another')
-                }
-                
-            })   
+                message.channel.send('You have an open challenge, please await a response to this challenge before opening another')
+                //message.author.send('You have an open challenge, please await a response to this challenge before opening another')
+        }
+    })   
         } else {
             message.channel.send(`You have an active game currently open, please report on the result of this game to open another challenge`)
             //message.author.send(`You have an active game currently open, please report on the result of this game to open another challenge`)

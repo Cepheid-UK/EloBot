@@ -12,7 +12,6 @@ exports.run = (client, message, args, dbConnection) => {
     dbConnection.query(sql, function (err, result) {
       if (err) throw err;
       queryResult = result
-      console.log(queryResult)
       
 
       if (queryResult.length === 0) { // if the result from the query contains no values
