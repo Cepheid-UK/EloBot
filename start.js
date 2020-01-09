@@ -7,6 +7,8 @@ const client = new Discord.Client();
 const token = require("./auth.json");
 const mysql = require("mysql");
 
+const activeChannel = 'elobot'
+
 client.commands = new Discord.Collection();
 
 // Client online
@@ -24,8 +26,7 @@ var connection = mysql.createConnection({
   host: "localhost",
   user: "root",
   password: "sunday21",
-  database: "ebdb",
-  multipleStatements: "true"
+  database: "ebdb"
 });
 
 connection.connect(err => {
@@ -37,6 +38,7 @@ connection.connect(err => {
 client.on("message", message => {
     if (message.author.bot) return;
     if (message.content.indexOf(prefix) !== 0) return;
+    if (message.channel.name != activeChannel) return;
 
   const args = message.content.slice(prefix.length).trim().split(/ +/g);
   const command = args.shift();
