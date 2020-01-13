@@ -1,3 +1,5 @@
-const elo = require('./util/calculate_elo.js')
+let theTime = new Date().toISOString()
+    .replace("Z","")
+    .replace("T"," ");
 
-console.log(elo.calculateElo(1400,1450,0))
+console.log(theTime)

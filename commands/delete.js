@@ -5,8 +5,8 @@ exports.run = async (client, message, args, connection) => {
         if (err) throw err;
         connection.query('DELETE FROM open_challenges;', function (err, results) {
             if (err) throw err;
-            console.log('Database wiped')
-            message.channel.send('Database wiped')
+            console.log('tables: active_games and open_challenges have been wiped')
+            message.channel.send('active games and open challenges have been wiped')
         })
         
     })
