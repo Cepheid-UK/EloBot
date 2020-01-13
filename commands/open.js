@@ -5,7 +5,6 @@
 
 const Discord = require('discord.js')
 const Elo = require('../util/calculate_elo')
-const util = require('../util/returnPlayer')
 
 exports.run = (client, message, args, connection) => {
 
@@ -58,8 +57,6 @@ exports.run = (client, message, args, connection) => {
                                     .setFooter('This message brought to you by EloBot - Created by Cepheid#6411')
 
                                     let challengeMessage = await message.channel.send({embed: challengeEmbed})
-
-                                    console.log(message.author.tag)
                                     
                                     challengeMessage.awaitReactions((reaction, user) => 
                                         
@@ -81,7 +78,6 @@ exports.run = (client, message, args, connection) => {
                                                 if (err) throw err;
 
                                                 let map = [results6[0].name, results6[0].abbreviation]
-                                                console.log(map)
 
                                                 challengeMessage.delete()
                                                 let matchEmbed = new Discord.RichEmbed()
@@ -101,10 +97,30 @@ exports.run = (client, message, args, connection) => {
                                                     {max: 1, time:GAME_TIMER}).then(collected => {
                                                         // one of the players in the active game reported on the result
 
-                                                        if (reaction.emoji.name === '❓') {
-                                                            // disputed result
-                                                        }
 
+                                                        // close active game
+                                                        let response = collected.last().emoji.name
+                                                        let reactingUser = collected.last().users.last()
+
+                                                        let eloInput = false
+
+                                                        if (response === '❓') {
+                                                            console.log('handle disputed game')
+                                                        } else {
+                                                            eloInput = workOutResult(reactingUser, response, challengeUser)
+
+                                                            // get existing elos
+                                                            connection.query('SELECT elo FROM players WHERE discord_id=? OR discord_id=?',[challengeUser.tag,acceptingUser.tag], function(err,results7) {
+                                                                console.log(results7)
+                                                            })
+                                                            // calculate elo
+                                                            // add to sql
+                                                            // save to completed games table
+                                                        }
+                                                        
+                                                    }).catch(function(err) {
+                                                        console.log(err)
+                                                        // should only happen on timeout - need to handle a timeout scenario.
                                                     })
                                             
                                                 await matchMessage.react('✅')
@@ -142,6 +158,29 @@ exports.run = (client, message, args, connection) => {
             })
         })
     }
+
+    function workOutResult(reactingUser, reaction, challengerUser) {
+
+        let winner
+
+        if (reaction === '✅') {
+            if (reactingUser.id === challengerUser.id) {
+                winner = 1
+            } else {
+                winner = 0
+            } 
+        } else { // reaction === '❌'
+            if (reactingUser.id === challengerUser.id) {
+                winner = 0
+            } else {
+                winner = 1
+            }
+        }
+
+        return winner
+    }
+
+        
 };
 
 function getTheTime() {
@@ -150,4 +189,3 @@ function getTheTime() {
     .replace("T"," ");
     return theTime
 }
-
