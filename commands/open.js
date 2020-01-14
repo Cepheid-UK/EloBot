@@ -102,20 +102,33 @@ exports.run = (client, message, args, connection) => {
                                                         let response = collected.last().emoji.name
                                                         let reactingUser = collected.last().users.last()
 
-                                                        let eloInput = false
+                                                        let eloInput = []
 
                                                         if (response === '❓') {
                                                             console.log('handle disputed game')
+                                                            deleteFromActiveGames(challengeUser.tag, connection)
+                                                            // add game to disputed list
                                                         } else {
-                                                            eloInput = workOutResult(reactingUser, response, challengeUser)
-
                                                             // get existing elos
                                                             connection.query('SELECT elo FROM players WHERE discord_id=? OR discord_id=?',[challengeUser.tag,acceptingUser.tag], function(err,results7) {
-                                                                console.log(results7)
+                                                                
+                                                                eloInput.push(results7[0].elo)
+                                                                eloInput.push(results7[1].elo)
+                                                                eloInput.push(workOutResult(reactingUser, response, challengeUser))
+
+                                                                let eloResult = Elo.calculateElo(eloInput[0],eloInput[1],eloInput[2])
+
+                                                                let eloChange = Math.abs(eloInput[0] - eloResult[0])
+                                                                console.log(eloChange)
+                                                                console.log(eloResult)
+
+                                                                updateElos(eloResult, connection, challengeUser, acceptingUser)
+
+                                                                recordGame(eloChange, eloResult, eloInput[2], map, connection, challengeUser, acceptingUser, timeOfChallenge)
+
+                                                                matchMessage.delete()
+                                                                
                                                             })
-                                                            // calculate elo
-                                                            // add to sql
-                                                            // save to completed games table
                                                         }
                                                         
                                                     }).catch(function(err) {
@@ -149,6 +162,74 @@ exports.run = (client, message, args, connection) => {
         }
     })
     
+    function deleteFromActiveGames(challengeUser, connection) {
+        connection.query('DELETE FROM active_games WHERE player1=?',[challengeUser],function (err) {
+            if (err) throw err;
+        })
+    }
+
+    function recordGame(eloChange, eloResult, winner, map, connection, challengeUser, acceptingUser, timeOfChallenge) {
+        // this function arranges all the data and adds it to the completed_game table, and removes the same game from the active_games table
+
+        let dbWinner = winner
+        if (dbWinner === 0) {
+            dbWinner = 2
+        }
+        //     SCHEMA:
+        //     id bigint
+        //     gametype int(2)
+        //     player1 char(128)
+        //     player1_newelo int(5)
+        //     player2 char(128)
+        //     player2_newelo int(5)
+        //     winner char(128)
+        //     elo_change int(4)
+        //     map char(2)
+        //     time_of_challenge
+        //     time_of_completion
+
+        connection.query('INSERT INTO completed_games '+
+        
+        '(player1, '+
+        'player1_newelo, '+
+        'player2, '+
+        'player2_newelo, '+
+        'winner, '+
+        'elo_change, '+
+        'map, '+
+        'time_of_challenge, '+
+        'time_of_completion) '+
+        
+        'VALUES ' +
+        '(?,?,?,?,?,?,?,?,?)',
+        
+        [challengeUser.tag,
+        eloResult[0],
+        acceptingUser.tag,
+        eloResult[1],
+        dbWinner,
+        eloChange,
+        map[1],
+        timeOfChallenge,
+        getTheTime()], 
+        
+        function (err) {
+            if (err) throw err;
+        })
+
+        deleteFromActiveGames(challengeUser.tag, connection)
+    }
+
+    function updateElos(eloResult, connection, challengeUser, acceptingUser) {
+        // uses the result of an elo calculation to update the players table
+        connection.query('UPDATE players SET Elo=? WHERE discord_id=?',[eloResult[0],challengeUser.tag],function (err){
+            if (err) throw err;
+        })
+        connection.query('UPDATE players SET Elo=? WHERE discord_id=?',[eloResult[1],acceptingUser.tag], function(err){
+            if (err) throw err;
+        })
+    }
+    
     function challengeBecomesMatch(challengingUserTag, acceptingUserTag) {
         // deletes the challenge in the db and adds an active game with the accepting user        
         connection.query('DELETE FROM open_challenges WHERE discord_id=?',[challengingUserTag], function(err){
@@ -160,6 +241,7 @@ exports.run = (client, message, args, connection) => {
     }
 
     function workOutResult(reactingUser, reaction, challengerUser) {
+        // figures out who is the winner for the elo calculation to use, based on the reaction given and who the reactor is.
 
         let winner
 
@@ -184,6 +266,7 @@ exports.run = (client, message, args, connection) => {
 };
 
 function getTheTime() {
+    // formats for MySQL 'DATETIME' type 
     let theTime = new Date().toISOString()
     .replace("Z","")
     .replace("T"," ");
