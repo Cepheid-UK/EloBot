@@ -8,11 +8,13 @@ const Elo = require('../util/calculate_elo')
 
 exports.run = (client, message, args, connection) => {
 
+    if (message.channel.name != 'elobot') {
+        return;
+    }
+
     let CHALLENGE_TIMER = 1 * 10 * 1000; // length of time an open challenge is kept open - set to 10 sec for testing
     let GAME_TIMER = 1 * 10 * 1000; // length of time an active game is kept open - set to 10 sec for testing
     let SUMMARY_TIMER = 1 * 10 * 1000; // length of time to keep the match summary up, in case match dispute resolution
-
-    let match = {}
 
     let timeOfChallenge = getTheTime()
 
@@ -107,33 +109,93 @@ exports.run = (client, message, args, connection) => {
                                                         if (response === '❓') {
                                                             console.log('handle disputed game')
                                                             deleteFromActiveGames(challengeUser.tag, connection)
+                                                            createDisputedGame(challengeUser.tag, connection)
                                                             // add game to disputed list
                                                         } else {
                                                             // get existing elos
-                                                            connection.query('SELECT elo FROM players WHERE discord_id=? OR discord_id=?',[challengeUser.tag,acceptingUser.tag], function(err,results7) {
-                                                                
+                                                            connection.query('SELECT elo FROM players WHERE discord_id=? OR discord_id=?',[challengeUser.tag,acceptingUser.tag], async function(err,results7) {
+                                                                if (err) throw err;
+
                                                                 eloInput.push(results7[0].elo)
                                                                 eloInput.push(results7[1].elo)
-                                                                eloInput.push(workOutResult(reactingUser, response, challengeUser))
+                                                                let winningIndicator = workOutResult(reactingUser, response, challengeUser)
+                                                                eloInput.push(winningIndicator)
 
                                                                 let eloResult = Elo.calculateElo(eloInput[0],eloInput[1],eloInput[2])
 
                                                                 let eloChange = Math.abs(eloInput[0] - eloResult[0])
+                                                                let challengerEloChange = eloResult[0] - eloInput[0]
+                                                                let acceptingEloChange = eloResult[1] - eloInput[1]
+
+                                                                if (challengerEloChange > 0) {
+                                                                    challengerEloChange = '+' + challengerEloChange.toString()
+                                                                    acceptingEloChange = acceptingEloChange.toString()
+                                                                } else if (acceptingEloChange > 0) {
+                                                                    challengerEloChange = challengerEloChange.toString()
+                                                                    acceptingEloChange = '+' + acceptingEloChange.toString()
+                                                                }
+
                                                                 console.log(eloChange)
                                                                 console.log(eloResult)
 
                                                                 updateElos(eloResult, connection, challengeUser, acceptingUser)
 
                                                                 recordGame(eloChange, eloResult, eloInput[2], map, connection, challengeUser, acceptingUser, timeOfChallenge)
-
-                                                                matchMessage.delete()
                                                                 
+                                                                let winningUser
+
+                                                                if (winningIndicator === 1) {
+                                                                    winningUser = challengeUser
+                                                                } else {
+                                                                    winningUser = acceptingUser
+                                                                }
+
+                                                                //await matchMessage.clearReactions()
+
+                                                                let summaryEmbed = new Discord.RichEmbed()
+                                                                    .setColor('#0099ff')
+                                                                    .setTitle('Match Summary')
+                                                                    .setDescription(challengeUser + ' vs ' + acceptingUser)
+                                                                    .addField('Winner: ',winningUser)
+                                                                    .addField('ELO Change :',
+                                                                        challengeUser.username + ': ' + eloResult[0] + ' (' + challengerEloChange + ')\n' +
+                                                                        acceptingUser.username + ': ' + eloResult[1] + ' (' + acceptingEloChange + ')')
+                                                                    .setFooter('This message brought to you by EloBot - Created by Cepheid')
+                                                                    .addField('Map:', map[0] + ' (' + map[1] + ')')
+
+                                                                matchMessage.edit({embed: summaryEmbed})
+                                                                
+                                                                matchMessage.awaitReactions((reaction, user) =>
+                                                                    
+                                                                    // Filter for accepting valid reactions on the summary
+                                                                    (user.id === challengeUser || user.id === acceptingUser) && // 1. it's one of the two players
+                                                                    ['✅','❌','❓'].includes(reaction.emoji.name) && // 2. its one of the valid responses
+                                                                    !reaction.users.array().includes(user), // 3. that the user has not already reacted
+
+                                                                    {max: 2, time: SUMMARY_TIMER}).then(collected => {
+                                                                        console.log(collected.array())
+                                                                    }).catch(function(err) {
+                                                                        if (err) throw err;
+                                                                    })
+
+                                                                // create match summary embed
+                                                                // await reactions to confirm accepting or not
+                                                                // add reactions as options
+                                                                // update embed when match is confirmed result
+                                                                // catch embed after timeout
+                                                                
+                                                                await matchMessage.react('✅')
+                                                                await matchMessage.react('❌')
+                                                                matchMessage.react('❓')
                                                             })
                                                         }
                                                         
                                                     }).catch(function(err) {
-                                                        console.log(err)
-                                                        // should only happen on timeout - need to handle a timeout scenario.
+                                                        // timeout
+                                                        connection.query('DELETE FROM active_games WHERE player1=?',[message.author.tag], function(err) {
+                                                            if (err) throw err;
+                                                            matchMessage.delete()
+                                                        })
                                                     })
                                             
                                                 await matchMessage.react('✅')
@@ -143,8 +205,10 @@ exports.run = (client, message, args, connection) => {
 
                                             
                                         }).catch(function(err) {
+                                            // timeout
                                             connection.query('DELETE FROM open_challenges WHERE discord_id=?',[message.author.tag], function(err) {
                                                 console.log('timeout - open challenge deleted')
+                                                challengeMessage.delete()
                                             })
                                         }) 
 
@@ -161,6 +225,10 @@ exports.run = (client, message, args, connection) => {
             })
         }
     })
+
+    function createDisputedGame(challengeUser, connection) {
+        // incomplete function that will create a disputed game for admin review
+    }
     
     function deleteFromActiveGames(challengeUser, connection) {
         connection.query('DELETE FROM active_games WHERE player1=?',[challengeUser],function (err) {

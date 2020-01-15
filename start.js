@@ -7,7 +7,7 @@ const client = new Discord.Client();
 const token = require("./auth.json");
 const mysql = require("mysql");
 
-const activeChannel = 'elobot'
+const activeChannels = ['elobot', 'elobot-admin']
 
 client.commands = new Discord.Collection();
 
@@ -29,23 +29,30 @@ var connection = mysql.createConnection({
   database: "ebdb"
 });
 
+let admins = []
+
 connection.connect(err => {
   if(err) throw err;
   console.log("Connected to database");
+  connection.query('SELECT discord_id FROM admins', function(err, results) {
+    for (i in results) {
+        admins.push(results[i].discord_id)
+    }
+  })
 });
 
 // Initializing incoming commands
 client.on("message", message => {
     if (message.author.bot) return;
     if (message.content.indexOf(prefix) !== 0) return;
-    if (message.channel.name != activeChannel) return;
+    if (!activeChannels.includes(message.channel.name)) return;
 
   const args = message.content.slice(prefix.length).trim().split(/ +/g);
   const command = args.shift();
 
   try {
     let commandFile = require(`./commands/${command}.js`);
-    commandFile.run(client, message, args, connection);
+    commandFile.run(client, message, args, connection, admins);
   } catch (err) {
     console.error(err);
   }
