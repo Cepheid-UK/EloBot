@@ -1,15 +1,12 @@
 ///// ----- EloBot Command Handler ----- /////
 
 const prefix = ('!');
-const fs = require('fs');
 const Discord = require("Discord.js");
 const client = new Discord.Client();
 const token = require("./auth.json");
 const mysql = require("mysql");
 
 const activeChannels = ['elobot', 'elobot-admin']
-
-client.commands = new Discord.Collection();
 
 // Client online
 client.on("ready", () => {

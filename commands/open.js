@@ -107,7 +107,6 @@ exports.run = (client, message, args, connection) => {
                                                         let eloInput = []
 
                                                         if (response === '❓') {
-                                                            console.log('handle disputed game')
                                                             deleteFromActiveGames(challengeUser.tag, connection)
                                                             createDisputedGame(challengeUser.tag, connection)
                                                             // add game to disputed list
@@ -134,13 +133,6 @@ exports.run = (client, message, args, connection) => {
                                                                     challengerEloChange = challengerEloChange.toString()
                                                                     acceptingEloChange = '+' + acceptingEloChange.toString()
                                                                 }
-
-                                                                console.log(eloChange)
-                                                                console.log(eloResult)
-
-                                                                updateElos(eloResult, connection, challengeUser, acceptingUser)
-
-                                                                recordGame(eloChange, eloResult, eloInput[2], map, connection, challengeUser, acceptingUser, timeOfChallenge)
                                                                 
                                                                 let winningUser
 
@@ -149,8 +141,6 @@ exports.run = (client, message, args, connection) => {
                                                                 } else {
                                                                     winningUser = acceptingUser
                                                                 }
-
-                                                                //await matchMessage.clearReactions()
 
                                                                 let summaryEmbed = new Discord.RichEmbed()
                                                                     .setColor('#0099ff')
@@ -162,20 +152,53 @@ exports.run = (client, message, args, connection) => {
                                                                         acceptingUser.username + ': ' + eloResult[1] + ' (' + acceptingEloChange + ')')
                                                                     .setFooter('This message brought to you by EloBot - Created by Cepheid')
                                                                     .addField('Map:', map[0] + ' (' + map[1] + ')')
+                                                                    .addField('Error?', 'If this result is correct, please react with ✅, if this result is not correct, please click ❌')
 
-                                                                matchMessage.edit({embed: summaryEmbed})
+                                                                matchMessage.delete()
+                                                                let summaryMessage = await message.channel.send({embed: summaryEmbed})
                                                                 
-                                                                matchMessage.awaitReactions((reaction, user) =>
-                                                                    
-                                                                    // Filter for accepting valid reactions on the summary
-                                                                    (user.id === challengeUser || user.id === acceptingUser) && // 1. it's one of the two players
-                                                                    ['✅','❌','❓'].includes(reaction.emoji.name) && // 2. its one of the valid responses
-                                                                    !reaction.users.array().includes(user), // 3. that the user has not already reacted
+                                                                summaryMessage.awaitReactions((reaction, user) => 
+                                                                    // filter
+                                                                    (user.id === challengeUser.id || user.id === acceptingUser.id) && // 1. valid user is reacting
+                                                                    ['✅','❌'].includes(reaction.emoji.name), // 2. giving a valid reaction
 
-                                                                    {max: 2, time: SUMMARY_TIMER}).then(collected => {
-                                                                        console.log(collected.array())
-                                                                    }).catch(function(err) {
-                                                                        if (err) throw err;
+                                                                    {maxUsers: 2, time: SUMMARY_TIMER}).then(collected => {
+                                                                        // if any of the reactions contains ❌ then the match is disputed 
+                                                                        // else it's confirmed
+                                                                       
+                                                                        if (collected.keyArray().includes('❌')) {
+                                                                            // match is disputed
+
+                                                                            createDisputedGame(challengeUser.tag, connection)
+
+                                                                            summaryMessage.clearReactions()
+                                                                            summaryEmbed.fields = []
+                                                                            summaryEmbed
+                                                                                .addField('Winner: ',winningUser)
+                                                                                /*.addField('ELO Change :',
+                                                                                    challengeUser.username + ': ' + eloResult[0] + ' (' + challengerEloChange + ')\n' +
+                                                                                    acceptingUser.username + ': ' + eloResult[1] + ' (' + acceptingEloChange + ')')
+                                                                                .addField('Map:', map[0] + ' (' + map[1] + ')')*/
+                                                                                .addField('Disputed','The result of this match is currently in dispute, contact an admin ' +
+                                                                                    '(!admins will give you a list of the current admins) to get a ruling on this match')
+                                                                            summaryMessage.edit({embed: summaryEmbed})
+                                                                        } else {
+                                                                            
+                                                                            updateElos(eloResult, connection, challengeUser, acceptingUser)
+
+                                                                            recordGame(eloChange, eloResult, eloInput[2], map, connection, challengeUser, acceptingUser, timeOfChallenge)
+                                                                            
+                                                                            summaryMessage.clearReactions()
+                                                                            summaryEmbed.fields = []
+                                                                            summaryEmbed
+                                                                                .addField('Winner: ',winningUser)
+                                                                                .addField('ELO Change :',
+                                                                                    challengeUser.username + ': ' + eloResult[0] + ' (' + challengerEloChange + ')\n' +
+                                                                                    acceptingUser.username + ': ' + eloResult[1] + ' (' + acceptingEloChange + ')')
+                                                                                .addField('Map:', map[0] + ' (' + map[1] + ')')
+                                                                                .addField('Confirmed','The result of this match has been confirmed and recorded.')
+                                                                            summaryMessage.edit({embed: summaryEmbed})
+                                                                        }
                                                                     })
 
                                                                 // create match summary embed
@@ -184,13 +207,13 @@ exports.run = (client, message, args, connection) => {
                                                                 // update embed when match is confirmed result
                                                                 // catch embed after timeout
                                                                 
-                                                                await matchMessage.react('✅')
-                                                                await matchMessage.react('❌')
-                                                                matchMessage.react('❓')
+                                                                await summaryMessage.react('✅')
+                                                                summaryMessage.react('❌')
                                                             })
                                                         }
                                                         
                                                     }).catch(function(err) {
+                                                        if (err) throw err;
                                                         // timeout
                                                         connection.query('DELETE FROM active_games WHERE player1=?',[message.author.tag], function(err) {
                                                             if (err) throw err;
@@ -228,6 +251,10 @@ exports.run = (client, message, args, connection) => {
 
     function createDisputedGame(challengeUser, connection) {
         // incomplete function that will create a disputed game for admin review
+        console.log('disputed game submitted')
+        // 1 - check for games that include the challengeUser
+        // 2 - remove these games from active games
+        // 3 - use the data from the active game to create a disputed game in the db
     }
     
     function deleteFromActiveGames(challengeUser, connection) {
