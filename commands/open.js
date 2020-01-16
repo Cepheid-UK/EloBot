@@ -12,9 +12,9 @@ exports.run = (client, message, args, connection) => {
         return;
     }
 
-    let CHALLENGE_TIMER = 1 * 10 * 1000; // length of time an open challenge is kept open - set to 10 sec for testing
-    let GAME_TIMER = 1 * 10 * 1000; // length of time an active game is kept open - set to 10 sec for testing
-    let SUMMARY_TIMER = 1 * 10 * 1000; // length of time to keep the match summary up, in case match dispute resolution
+    let CHALLENGE_TIMER = 10 * 60 * 1000; // length of time an open challenge is kept open - set to 10 mins for testing
+    let GAME_TIMER = 60 * 60 * 1000; // length of time an active game is kept open - set to 1 hour for testing
+    let SUMMARY_TIMER = 15 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 
     let timeOfChallenge = getTheTime()
 
@@ -88,6 +88,7 @@ exports.run = (client, message, args, connection) => {
                                                 .setDescription(challengeUser + ' vs ' + acceptingUser)
                                                 .setFooter('This message brought to you by EloBot - Created by Cepheid')
                                                 .addField('Map:', map[0] + ' (' + map[1] + ')')
+                                                .addField('Report:','To report on the result of this match, please indicate whether you won (✅) or lost (❌) the match by reacting to this message')
 
                                                 let matchMessage = await message.channel.send({embed: matchEmbed})
 
@@ -199,6 +200,21 @@ exports.run = (client, message, args, connection) => {
                                                                                 .addField('Confirmed','The result of this match has been confirmed and recorded.')
                                                                             summaryMessage.edit({embed: summaryEmbed})
                                                                         }
+                                                                    }).catch(function (err) {
+                                                                        updateElos(eloResult, connection, challengeUser, acceptingUser)
+
+                                                                        recordGame(eloChange, eloResult, eloInput[2], map, connection, challengeUser, acceptingUser, timeOfChallenge)
+                                                                        
+                                                                        summaryMessage.clearReactions()
+                                                                        summaryEmbed.fields = []
+                                                                        summaryEmbed
+                                                                            .addField('Winner: ',winningUser)
+                                                                            .addField('ELO Change :',
+                                                                                challengeUser.username + ': ' + eloResult[0] + ' (' + challengerEloChange + ')\n' +
+                                                                                acceptingUser.username + ': ' + eloResult[1] + ' (' + acceptingEloChange + ')')
+                                                                            .addField('Map:', map[0] + ' (' + map[1] + ')')
+                                                                            .addField('Confirmed','The result of this match has been confirmed and recorded.')
+                                                                        summaryMessage.edit({embed: summaryEmbed})
                                                                     })
 
                                                                 // create match summary embed
