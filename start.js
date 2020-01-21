@@ -26,16 +26,6 @@ client.on('disconnect', function(erMsg, code) {
     client.connect();
   });
 
-// connection.connect(err => {
-//   if(err) throw err;
-//   console.log("Connected to database");
-//   connection.query('SELECT discord_id FROM admins', function(err, results) {
-//     for (i in results) {
-//         admins.push(results[i].discord_id)
-//     }
-//   })
-// });
-
 // Initializing incoming commands
 client.on("message", message => {
     if (message.author.bot) return;
