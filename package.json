@@ -18,6 +18,9 @@
   "homepage": "https://github.com/Cepheid-UK/EloBot#readme",
   "dependencies": {
     "discord.js": "^11.5.1",
-    "mysql": "^2.17.1"
+    "knex": "^0.20.8",
+    "mysql": "^2.17.1",
+    "mysql-promisify": "^1.0.1",
+    "mysql2": "^2.1.0"
   }
 }

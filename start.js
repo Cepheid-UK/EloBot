@@ -4,9 +4,16 @@ const prefix = ('!');
 const Discord = require("Discord.js");
 const client = new Discord.Client();
 const token = require("./auth.json");
-const mysql = require("mysql");
+const { MySQL } = require("mysql-promisify")
 
 const activeChannels = ['elobot', 'elobot-admin']
+
+const database = new MySQL({
+  host: "localhost",
+  user: "root",
+  password: "sunday21",
+  database: "ebdb"
+})
 
 // Client online
 client.on("ready", () => {
@@ -19,24 +26,15 @@ client.on('disconnect', function(erMsg, code) {
     client.connect();
   });
 
-var connection = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "sunday21",
-  database: "ebdb"
-});
-
-let admins = []
-
-connection.connect(err => {
-  if(err) throw err;
-  console.log("Connected to database");
-  connection.query('SELECT discord_id FROM admins', function(err, results) {
-    for (i in results) {
-        admins.push(results[i].discord_id)
-    }
-  })
-});
+// connection.connect(err => {
+//   if(err) throw err;
+//   console.log("Connected to database");
+//   connection.query('SELECT discord_id FROM admins', function(err, results) {
+//     for (i in results) {
+//         admins.push(results[i].discord_id)
+//     }
+//   })
+// });
 
 // Initializing incoming commands
 client.on("message", message => {
@@ -49,7 +47,7 @@ client.on("message", message => {
 
   try {
     let commandFile = require(`./commands/${command}.js`);
-    commandFile.run(client, message, args, connection, admins);
+    commandFile.run(client, message, args, database);
   } catch (err) {
     console.error(err);
   }
