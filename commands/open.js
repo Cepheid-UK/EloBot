@@ -4,9 +4,12 @@ const Discord = require('discord.js')
 
 exports.run = async (client, message, args, database) => {
     if (message.channel.name != 'elobot') return;
+
+    console.log(client.username)
     
     const CHALLENGE_TIMER = 5 * 1 * 1000; // length of time an open challenge is kept open - set to 10 mins for testing
-    const MATCH_TIMER = 60 * 60 * 1000; // length of time an active game is kept open - set to 1 hour for testing
+    const MATCH_TIMER = 5 * 1 * 1000; // length of time an active game is kept open - set to 1 hour for testing
+    const WARNING_TIMER = 15 * 1 * 1000; /// length of time for players to respond to the warning message
     const SUMMARY_TIMER = 15 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
     
     let authorQuery = await database.query({sql: `SELECT * FROM players WHERE discord_id='${message.author.tag}';`})
@@ -101,6 +104,7 @@ exports.run = async (client, message, args, database) => {
     // await reactions for match result
     const matchFilter = (reaction, user) => {
         return user.id === message.author.id || user.id === reacter.id &&
+            user.id != matchMessage.author.id &&
             ['✅','❌','❓'].includes(reaction.emoji.name)
     }
 
@@ -110,21 +114,43 @@ exports.run = async (client, message, args, database) => {
     let reportingPlayer
     let reportedEmoji
 
+    // TO-DO - currently both the try and catch are being triggered when this times out. Investigate.
+
     await matchMessage.awaitReactions(matchFilter, {max: 1, time: MATCH_TIMER, errors: ['Timeout']}).then(collected => {
+        console.log(`reaction on the match`)
         reportingPlayer = collected.last().users.last().tag
         reportedEmoji = collected.last().emoji.name
         //matchMessage.delete()
-    }).catch(collected => {
-        console.error
+    }).catch(async function () {
+        console.log(`no reaction on the match`)
+        // warn the players that they have not responded in time
+        warningMessage = await message.channel.send(`ATTENTION: ${message.author} and ${reacter}, No result has been reported for your match ` +
+        `on ${map.results[0].name}, please react to this message with ✅ to indicate that you won the match or ❌ to indicate that you lost, `+
+        `if no reaction is given within 15 minutes, this match shall be cancelled. If there was an issue with this match, `+
+        `please react with ❓ to have this match flagged for review by an admin.`)
+
+        await warningMessage.react('✅')
+        warningMessage.react('❌')
+
+        const warningFilter = (reaction, user) => {
+            return user.id = message.author.id || user.id === reacter.id &&
+                user.id != warningMessage.author.id &&
+                ['✅','❌','❓'].includes(reaction.emoji.name)
+        }
+
+        let warningReportingPlayer
+        let warningReportedEmoji
+
+        await warningMessage.awaitReactions(warningFilter, {max: 1, time: WARNING_TIMER, errors: ['Timeout']}).then(collected =>{
+            warningReportingPlayer = collected.last().users.last().tag
+            console.log(warningReportingPlayer)
+            warningReportedEmoji = collected.last().emoji.name
+            console.log(warningReportedEmoji)
+        }).catch(collected => {
+            console.log(`Warning Timeout`)
+        })
+        
     })
-
-
-
-    console.log(reportingPlayer)
-    console.log(reportedEmoji)
-
-
-
     // TO-DO - shift all this to a module
 
 }
