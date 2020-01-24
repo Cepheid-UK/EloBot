@@ -14,11 +14,4 @@ exports.run = async (client, message, args, connection) => {
             message.channel.send({embed: eloEmbed})
         }
     })
-    
-    // get user's name
-    // check DB to see if that name is in 'players'
-    // if yes -> send a messaage with their elo
-    // if no -> tell them to signup
-
-    
 }

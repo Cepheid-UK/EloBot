@@ -4,8 +4,6 @@ const Discord = require('discord.js')
 
 exports.run = async (client, message, args, database) => {
     if (message.channel.name != 'elobot') return;
-
-    console.log(client.username)
     
     const CHALLENGE_TIMER = 5 * 1 * 1000; // length of time an open challenge is kept open - set to 10 mins for testing
     const MATCH_TIMER = 5 * 1 * 1000; // length of time an active game is kept open - set to 1 hour for testing
@@ -105,7 +103,7 @@ exports.run = async (client, message, args, database) => {
     const matchFilter = (reaction, user) => {
         return user.id === message.author.id || user.id === reacter.id &&
             user.id != matchMessage.author.id &&
-            ['✅','❌','❓'].includes(reaction.emoji.name)
+            ['✅','❌'].includes(reaction.emoji.name) // support '❓' later
     }
 
     await matchMessage.react('✅')
@@ -117,35 +115,65 @@ exports.run = async (client, message, args, database) => {
     // TO-DO - currently both the try and catch are being triggered when this times out. Investigate.
 
     await matchMessage.awaitReactions(matchFilter, {max: 1, time: MATCH_TIMER, errors: ['Timeout']}).then(collected => {
+
+        let lastReaction = collected.last()
+        
+
+        // since the bot adds reactions, collected will always contain a MessageReaction, so check to ensure it's actually a player:
+        if (lastReaction.users.last().id != message.author.id && lastReaction.users.last().id != reacter.id) { return };
+
         console.log(`reaction on the match`)
-        reportingPlayer = collected.last().users.last().tag
-        reportedEmoji = collected.last().emoji.name
+        reportingPlayer = lastReaction.users.last().tag
+        reportedEmoji = lastReaction.emoji.name
+        database.query({sql: `DELETE FROM active_games WHERE player1='${reportingPlayer}' OR player2='${reportingPlayer}'`})
+
+        // report on the result as per match reaction
+            // function to calculate winner from the reaction
+            // function to send the result to the completed_games table
+
+        // pass a function: 1. player1 2. player2, 3. who reported the result 4. what they reported 5. link to the database so function can query
+        workOutResult(message.author.tag, reacter.tag, resultReporter, resultEmoji, database)
+
+        if (reportedEmoji === '✅') {
+            // the player who reported was the winner
+            console.log(`${reportingPlayer} won`)
+        } else if (reportedEmoji === '❌') {
+            // player who reported was the loser
+            console.log(`${reportingPlayer} lost`)
+        }
+        
+
         //matchMessage.delete()
     }).catch(async function () {
         console.log(`no reaction on the match`)
         // warn the players that they have not responded in time
-        warningMessage = await message.channel.send(`ATTENTION: ${message.author} and ${reacter}, No result has been reported for your match ` +
+        let warningMessage = await message.channel.send(`ATTENTION: ${message.author} and ${reacter}, No result has been reported for your match ` +
         `on ${map.results[0].name}, please react to this message with ✅ to indicate that you won the match or ❌ to indicate that you lost, `+
         `if no reaction is given within 15 minutes, this match shall be cancelled. If there was an issue with this match, `+
-        `please react with ❓ to have this match flagged for review by an admin.`)
+        `please react with ❓ (Not yet supported) to have this match flagged for review by an admin.`)
 
         await warningMessage.react('✅')
         warningMessage.react('❌')
 
         const warningFilter = (reaction, user) => {
-            return user.id = message.author.id || user.id === reacter.id &&
+            return user.id === message.author.id || user.id === reacter.id &&
                 user.id != warningMessage.author.id &&
-                ['✅','❌','❓'].includes(reaction.emoji.name)
+                ['✅','❌'].includes(reaction.emoji.name) // support '❓' later
         }
 
         let warningReportingPlayer
         let warningReportedEmoji
 
         await warningMessage.awaitReactions(warningFilter, {max: 1, time: WARNING_TIMER, errors: ['Timeout']}).then(collected =>{
-            warningReportingPlayer = collected.last().users.last().tag
-            console.log(warningReportingPlayer)
-            warningReportedEmoji = collected.last().emoji.name
-            console.log(warningReportedEmoji)
+
+            let warningLastReaction = collected.last()
+            // as with match: since the bot adds reactions, collected will always contain a MessageReaction, check to ensure it's actually a player:
+            if (warningLastReaction.users.last().id != message.author.id && warningLastReaction.users.last().id != reacter.id) { return };
+
+            // report on the result as per match reaction
+            // function to calculate winner from the reaction
+            // function to send the result to the completed_games table
+
         }).catch(collected => {
             console.log(`Warning Timeout`)
         })
@@ -153,6 +181,32 @@ exports.run = async (client, message, args, database) => {
     })
     // TO-DO - shift all this to a module
 
+}
+
+function workOutResult(player1tag, player2tag, resultReporter, resultEmoji) {
+    // returns an array size 3, with:
+    // [player1tag, player2tag, result] where 'result' is a 1 if player1 won and 0 if player2 won.
+    // these are the values that the elo calculation requires
+
+    if (player1tag === resultReporter) {
+        // player 1 reacted
+        if (resultEmoji === '✅') {
+            // player 1 won
+            return [player1tag, player2tag, 1]
+        } else {
+            // player 1 lost
+            return [player1tag, player2tag, 0]
+        }
+    } else {
+        // player 2 reacted
+        if (resultEmoji === '✅') {
+            // player 2 won
+            return [player1tag, player2tag, 0]
+        } else {
+            // player 2 lost
+            return [player1tag, player2tag, 1]
+        }
+    }
 }
 
 function getTheTime() {
