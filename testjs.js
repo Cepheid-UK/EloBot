@@ -1,5 +1,3 @@
-let theTime = new Date().toISOString()
-    .replace("Z","")
-    .replace("T"," ");
+let testVar = 5
 
-console.log(theTime)
+console.log(false ? 5 : 10)

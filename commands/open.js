@@ -1,6 +1,7 @@
 // command for starting an open challenge
 
 const Discord = require('discord.js')
+const Elo = require('../util/calculate_elo')
 
 exports.run = async (client, message, args, database) => {
     if (message.channel.name != 'elobot') return;
@@ -132,7 +133,9 @@ exports.run = async (client, message, args, database) => {
             // function to send the result to the completed_games table
 
         // pass a function: 1. player1 2. player2, 3. who reported the result 4. what they reported 5. link to the database so function can query
-        workOutResult(message.author.tag, reacter.tag, resultReporter, resultEmoji, database)
+        let eloInput = workOutResult(message.author.tag, reacter.tag, reportingPlayer, reportedEmoji, database)
+
+        console.log(result)
 
         if (reportedEmoji === '✅') {
             // the player who reported was the winner
@@ -144,7 +147,8 @@ exports.run = async (client, message, args, database) => {
         
 
         //matchMessage.delete()
-    }).catch(async function () {
+    }).catch(async function (err) {
+        if (err) throw err;
         console.log(`no reaction on the match`)
         // warn the players that they have not responded in time
         let warningMessage = await message.channel.send(`ATTENTION: ${message.author} and ${reacter}, No result has been reported for your match ` +
@@ -183,30 +187,50 @@ exports.run = async (client, message, args, database) => {
 
 }
 
-function workOutResult(player1tag, player2tag, resultReporter, resultEmoji) {
-    // returns an array size 3, with:
-    // [player1tag, player2tag, result] where 'result' is a 1 if player1 won and 0 if player2 won.
-    // these are the values that the elo calculation requires
+async function workOutResult(player1tag, player2tag, reportingPlayer, reportedEmoji, database) {
+    // figures out who won from the reaction and then calls calcElo with that information
+    
+    let winner
 
-    if (player1tag === resultReporter) {
+    // could use conditional ternary operators to make this shorter, but this is more readable
+    if (player1tag === reportingPlayer) {
         // player 1 reacted
-        if (resultEmoji === '✅') {
+        if (reportedEmoji === '✅') {
             // player 1 won
-            return [player1tag, player2tag, 1]
+            winner = 1
         } else {
             // player 1 lost
-            return [player1tag, player2tag, 0]
+            winner = 0
         }
     } else {
         // player 2 reacted
-        if (resultEmoji === '✅') {
+        if (reportedEmoji === '✅') {
             // player 2 won
-            return [player1tag, player2tag, 0]
+            winner = 0
+            // await calcElo([player1tag, player2tag, 0], database)
         } else {
             // player 2 lost
-            return [player1tag, player2tag, 1]
+            winner = 1
+            // await calcElo([player1tag, player2tag, 1], database)
         }
     }
+
+    await calcElo([player1tag, player2tag, winner], database)
+}
+
+async function calcElo(input, database) {
+    // doesn't use multi-queries because of SQL injection
+    
+    // get player's elos
+    let player1EloQuery = await database.query({sql: `SELECT elo FROM players WHERE discord_id='${input[0]}'`})
+    let player2EloQuery = await database.query({sql: `SELECT elo FROM players WHERE discord_id='${input[1]}'`})
+
+    // calculate the change in elo
+    let newElos = Elo.calculateElo(player1EloQuery.results[0].elo, player2EloQuery.results[0].elo, input[2])
+
+    // update the players rows in the database
+    await database.query({sql: `UPDATE players SET Elo=${newElos[0]} WHERE discord_id='${input[0]}'`})
+    await database.query({sql: `UPDATE players SET Elo=${newElos[1]} WHERE discord_id='${input[1]}'`})
 }
 
 function getTheTime() {
