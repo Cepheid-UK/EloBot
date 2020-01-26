@@ -113,9 +113,7 @@ exports.run = async (client, message, args, database) => {
     let reportingPlayer
     let reportedEmoji
 
-    // TO-DO - currently both the try and catch are being triggered when this times out. Investigate.
-
-    await matchMessage.awaitReactions(matchFilter, {max: 1, time: MATCH_TIMER, errors: ['Timeout']}).then(collected => {
+    await matchMessage.awaitReactions(matchFilter, {max: 1, time: MATCH_TIMER, errors: ['Timeout']}).then(async collected => {
 
         let lastReaction = collected.last()
         
@@ -123,30 +121,21 @@ exports.run = async (client, message, args, database) => {
         // since the bot adds reactions, collected will always contain a MessageReaction, so check to ensure it's actually a player:
         if (lastReaction.users.last().id != message.author.id && lastReaction.users.last().id != reacter.id) { return };
 
-        console.log(`reaction on the match`)
         reportingPlayer = lastReaction.users.last().tag
         reportedEmoji = lastReaction.emoji.name
         database.query({sql: `DELETE FROM active_games WHERE player1='${reportingPlayer}' OR player2='${reportingPlayer}'`})
 
-        // report on the result as per match reaction
-            // function to calculate winner from the reaction
-            // function to send the result to the completed_games table
+        // pass a function: 1. player1 tag 2. player2 tag, 3. who reported the result 4. what they reported 5. link to the database so function can query
+        let matchResult = await processResult(message.author.tag, reacter.tag, reportingPlayer, reportedEmoji, database)
 
-        // pass a function: 1. player1 2. player2, 3. who reported the result 4. what they reported 5. link to the database so function can query
-        let eloInput = workOutResult(message.author.tag, reacter.tag, reportingPlayer, reportedEmoji, database)
+        let summaryEmbed = await createSummary(matchResult, map.results[0], message, reacter)
 
-        console.log(result)
+        message.channel.send({embed: summaryEmbed})
 
-        if (reportedEmoji === '✅') {
-            // the player who reported was the winner
-            console.log(`${reportingPlayer} won`)
-        } else if (reportedEmoji === '❌') {
-            // player who reported was the loser
-            console.log(`${reportingPlayer} lost`)
-        }
-        
+        matchMessage.delete()
 
-        //matchMessage.delete()
+        //calcElo([message.author.tag, reacter.tag, winner], database)
+
     }).catch(async function (err) {
         if (err) throw err;
         console.log(`no reaction on the match`)
@@ -179,15 +168,15 @@ exports.run = async (client, message, args, database) => {
             // function to send the result to the completed_games table
 
         }).catch(collected => {
+            if (err) throw err;
             console.log(`Warning Timeout`)
         })
         
     })
-    // TO-DO - shift all this to a module
 
 }
 
-async function workOutResult(player1tag, player2tag, reportingPlayer, reportedEmoji, database) {
+async function processResult(player1tag, player2tag, reportingPlayer, reportedEmoji, database) {
     // figures out who won from the reaction and then calls calcElo with that information
     
     let winner
@@ -207,21 +196,19 @@ async function workOutResult(player1tag, player2tag, reportingPlayer, reportedEm
         if (reportedEmoji === '✅') {
             // player 2 won
             winner = 0
-            // await calcElo([player1tag, player2tag, 0], database)
         } else {
             // player 2 lost
             winner = 1
-            // await calcElo([player1tag, player2tag, 1], database)
         }
     }
 
-    await calcElo([player1tag, player2tag, winner], database)
+    calcElo([player1tag, player2tag, winner], database)
+    return [player1tag, player2tag, winner]
 }
 
 async function calcElo(input, database) {
-    // doesn't use multi-queries because of SQL injection
     
-    // get player's elos
+    // get player's elos - using single queries to avoid sql injection
     let player1EloQuery = await database.query({sql: `SELECT elo FROM players WHERE discord_id='${input[0]}'`})
     let player2EloQuery = await database.query({sql: `SELECT elo FROM players WHERE discord_id='${input[1]}'`})
 
@@ -231,6 +218,7 @@ async function calcElo(input, database) {
     // update the players rows in the database
     await database.query({sql: `UPDATE players SET Elo=${newElos[0]} WHERE discord_id='${input[0]}'`})
     await database.query({sql: `UPDATE players SET Elo=${newElos[1]} WHERE discord_id='${input[1]}'`})
+
 }
 
 function getTheTime() {
@@ -239,4 +227,28 @@ function getTheTime() {
         .replace("Z","")
         .replace("T"," ");
     return theTime
+}
+
+async function createSummary(matchResult, map, message, reacter) {
+
+    let winningPlayer
+
+    if (matchResult[2] === 1) {
+        winningPlayer = message.author
+    } else {
+        winningPlayer = reacter
+    } 
+
+    console.log(`Winning player is: ${winningPlayer.tag}`)
+
+    // creates a match summary embed
+    return new Discord.RichEmbed()
+        .setColor('#0099ff')
+        .setTitle('Match Result Summary')
+        .setDescription(`${message.author} vs ${reacter}`)
+        .addField(`Winner:`, `${winningPlayer}`)
+        .setFooter(`This message brought to you by EloBot - Created by Cepheid`)
+        .addField(`Map`,`${map.name} (${map.abbreviation})`)
+        .addField('Confirm:','If this result is correct, please respond to this message with ✅')
+        .addField('Dispute:','If this result is not correct, please respond to this message with ❓')
 }

@@ -9,7 +9,7 @@ exports.run = async (client, message, args, database) => {
 
     // if there is no result, player isn't signed up
     if (!elo.results[0]) {
-        message.channel.send('Please use the !signup command to register to play in the EloBot Ladder')
+        message.channel.send('Please use the ``!signup`` command to register to play in the EloBot Ladder')
         return;
     }
 
