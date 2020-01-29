@@ -3,13 +3,15 @@
 const Discord = require('discord.js')
 const Elo = require('../util/calculate_elo')
 
+const CHALLENGE_TIMER = 5 * 1 * 1000; // length of time an open challenge is kept open - set to 10 mins for testing
+const MATCH_TIMER = 5 * 1 * 1000; // length of time an active game is kept open - set to 1 hour for testing
+const WARNING_TIMER = 15 * 1 * 1000; /// length of time for players to respond to the warning message
+const SUMMARY_TIMER = 15 * 1 * 1000; // length of time to keep the match summary up, in case match dispute resolution
+
 exports.run = async (client, message, args, database) => {
     if (message.channel.name != 'elobot') return;
     
-    const CHALLENGE_TIMER = 5 * 1 * 1000; // length of time an open challenge is kept open - set to 10 mins for testing
-    const MATCH_TIMER = 5 * 1 * 1000; // length of time an active game is kept open - set to 1 hour for testing
-    const WARNING_TIMER = 15 * 1 * 1000; /// length of time for players to respond to the warning message
-    const SUMMARY_TIMER = 15 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
+    
     
     let authorQuery = await database.query({sql: `SELECT * FROM players WHERE discord_id='${message.author.tag}';`})
     
@@ -116,10 +118,9 @@ exports.run = async (client, message, args, database) => {
     await matchMessage.awaitReactions(matchFilter, {max: 1, time: MATCH_TIMER, errors: ['Timeout']}).then(async collected => {
 
         let lastReaction = collected.last()
-        
 
         // since the bot adds reactions, collected will always contain a MessageReaction, so check to ensure it's actually a player:
-        if (lastReaction.users.last().id != message.author.id && lastReaction.users.last().id != reacter.id) { return };
+        //if (lastReaction.users.last().id != message.author.id && lastReaction.users.last().id != reacter.id) { return };
 
         reportingPlayer = lastReaction.users.last().tag
         reportedEmoji = lastReaction.emoji.name
@@ -130,9 +131,31 @@ exports.run = async (client, message, args, database) => {
 
         let summaryEmbed = await createSummary(matchResult, map.results[0], message, reacter)
 
-        message.channel.send({embed: summaryEmbed})
-
         matchMessage.delete()
+
+        let summaryMessage = await message.channel.send({embed: summaryEmbed})
+
+        
+
+        const summaryFilter = (reaction, user) => {
+            //console.log(`Reaction: ${reaction.emoji.name}, User: ${user.tag}`) // for debugging
+            return user.id === message.author.id || user.id === reacter.id && // 1. reacter is one of the two players
+                user.id != summaryMessage.author.id && // 2. not the bot
+                ['✅','❓'].includes(reaction.emoji.name) // 3. one of these emojis
+        }
+
+        summaryMessage.awaitReactions(summaryFilter, {maxUsers: 2, time: SUMMARY_TIMER, errors: 'Timeout'}).then(collected => {
+            if (collected.keyArray().includes('❓')) {
+                console.log(`match disputed`)
+            } else {
+                console.log(`match confirmed`)
+            }
+        })
+
+        await summaryMessage.react('✅')
+        summaryMessage.react('❓')
+
+        //await processSummary(message, summaryMessage, reacter, map.results[0], database)
 
         //calcElo([message.author.tag, reacter.tag, winner], database)
 
@@ -172,6 +195,37 @@ exports.run = async (client, message, args, database) => {
             console.log(`Warning Timeout`)
         })
         
+    })
+
+    // await reactions on the summary embed
+
+}
+
+async function processSummary(message, summaryMessage, reacter, map, database) {
+    // takes a message that is a summary awaits a reaction on it.
+    // if no reaction to the summary is given, it accepts the result
+    // if a '❓' is given, add to disputed games list
+
+    await summaryMessage.react('✅')
+    summaryMessage.react('❓')
+
+    const summaryFilter = (reaction, user) => {
+        console.log(`Reaction: ${reaction.emoji.name}, User: ${user.tag}`)
+        return user.id === message.author.id || user.id === reacter.id && // 1. reacter is one of the two players
+            user.id != summaryMessage.author.id && // 2. not the bot
+            ['✅','❓'].includes(reaction.emoji.name) // 3. one of these emojis
+    }
+
+    
+
+    await summaryMessage.awaitReactions(summaryFilter, {maxUsers: 2, time: SUMMARY_TIMER, errors: 'Timeout'}).then(collected =>{
+        
+        console.log('summary was reacted upon')
+
+        // put all the messageReactions in an array
+
+    }).catch(function (err) {
+        if (err) throw err;
     })
 
 }
