@@ -129,27 +129,42 @@ exports.run = async (client, message, args, database) => {
         // pass a function: 1. player1 tag 2. player2 tag, 3. who reported the result 4. what they reported 5. link to the database so function can query
         let matchResult = await processResult(message.author.tag, reacter.tag, reportingPlayer, reportedEmoji, database)
 
-        let summaryEmbed = await createSummary(matchResult, map.results[0], message, reacter)
+        // get the elo result to put into the summary, and later into the completed games table
+        let eloResult = await calcElo([message.author.tag, reacter.tag, matchResult[2]], database)
 
+        // create the embed
+        let summaryEmbed = await createSummary(matchResult, map.results[0], message, reacter, eloResult)
+
+        // remove the old embed
         matchMessage.delete()
 
+        // send the new embed
         let summaryMessage = await message.channel.send({embed: summaryEmbed})
-
         
-
+        // summary filter
         const summaryFilter = (reaction, user) => {
-            //console.log(`Reaction: ${reaction.emoji.name}, User: ${user.tag}`) // for debugging
-            return user.id === message.author.id || user.id === reacter.id && // 1. reacter is one of the two players
-                user.id != summaryMessage.author.id && // 2. not the bot
-                ['✅','❓'].includes(reaction.emoji.name) // 3. one of these emojis
+            return user.id === message.author.id || user.id === reacter.id &&
+                user.id != summaryMessage.author.id &&
+                ['✅','❓'].includes(reaction.emoji.name)
         }
 
-        summaryMessage.awaitReactions(summaryFilter, {maxUsers: 2, time: SUMMARY_TIMER, errors: 'Timeout'}).then(collected => {
+        summaryMessage.awaitReactions(summaryFilter, {max: 2, time: SUMMARY_TIMER, errors: 'Timeout'}).then(collected =>{
+
             if (collected.keyArray().includes('❓')) {
-                console.log(`match disputed`)
+                // there is a dispute
+                console.log(`summary result disputed`)
             } else {
+                // there were two reactions, neither of which were ❓
                 console.log(`match confirmed`)
             }
+        }).catch(function (err) {
+            // Time out on the summary
+            if (err) throw err;
+            // either one or no reactions were received.
+            // 1. check to see if there was 1 reaction
+            // 2. check to see if that was a ❓
+            // 3. if yes, make a disputed_game row
+            // 4. if no, make a completed_game row
         })
 
         await summaryMessage.react('✅')
@@ -201,33 +216,40 @@ exports.run = async (client, message, args, database) => {
 
 }
 
-async function processSummary(message, summaryMessage, reacter, map, database) {
-    // takes a message that is a summary awaits a reaction on it.
-    // if no reaction to the summary is given, it accepts the result
-    // if a '❓' is given, add to disputed games list
+async function confirmMatch(matchResult, eloResult, map, author, reacter, database) {
+    // completed_games table:
+//     +--------------------+------------+------+-----+---------+----------------+
+// | Field              | Type       | Null | Key | Default | Extra          |
+// +--------------------+------------+------+-----+---------+----------------+
+// | id                 | bigint(20) | NO   | PRI | NULL    | auto_increment |
+// | gametype           | int(2)     | NO   |     | 1       |                |
+// | player1            | char(128)  | NO   |     | NULL    |                |
+// | player1_newelo     | int(5)     | NO   |     | NULL    |                |
+// | player2            | char(128)  | NO   |     | NULL    |                |
+// | player2_newelo     | int(5)     | NO   |     | NULL    |                |
+// | winner             | char(128)  | NO   |     | NULL    |                |
+// | elo_change         | int(4)     | NO   |     | NULL    |                |
+// | map                | char(4)    | NO   |     | NULL    |                |
+// | time_of_challenge  | datetime   | NO   |     | NULL    |                |
+// | time_of_completion | datetime   | NO   |     | NULL    |                |
+// +--------------------+------------+------+-----+---------+----------------+
 
-    await summaryMessage.react('✅')
-    summaryMessage.react('❓')
-
-    const summaryFilter = (reaction, user) => {
-        console.log(`Reaction: ${reaction.emoji.name}, User: ${user.tag}`)
-        return user.id === message.author.id || user.id === reacter.id && // 1. reacter is one of the two players
-            user.id != summaryMessage.author.id && // 2. not the bot
-            ['✅','❓'].includes(reaction.emoji.name) // 3. one of these emojis
+    // id is auto_increment
+    // gametype is auto 1
+    let player1 = author.tag
+    let player1_newelo = eloResult[0]
+    let plyaer2 = reacter.tag
+    let player2_newelo = eloResult[1]
+    
+    // convert winner to be the player who won i.e. p1 won, then winner = 1, p2 won, winner = 2
+    let winner;
+    if (eloResult[2] === 0) {
+        winner = 1
+    } else {
+        winner = 2
     }
 
-    
-
-    await summaryMessage.awaitReactions(summaryFilter, {maxUsers: 2, time: SUMMARY_TIMER, errors: 'Timeout'}).then(collected =>{
-        
-        console.log('summary was reacted upon')
-
-        // put all the messageReactions in an array
-
-    }).catch(function (err) {
-        if (err) throw err;
-    })
-
+    // get old elo for elo_change
 }
 
 async function processResult(player1tag, player2tag, reportingPlayer, reportedEmoji, database) {
@@ -256,7 +278,6 @@ async function processResult(player1tag, player2tag, reportingPlayer, reportedEm
         }
     }
 
-    calcElo([player1tag, player2tag, winner], database)
     return [player1tag, player2tag, winner]
 }
 
@@ -273,6 +294,11 @@ async function calcElo(input, database) {
     await database.query({sql: `UPDATE players SET Elo=${newElos[0]} WHERE discord_id='${input[0]}'`})
     await database.query({sql: `UPDATE players SET Elo=${newElos[1]} WHERE discord_id='${input[1]}'`})
 
+    // absolute elo change
+    newElos.push(Math.abs(player1EloQuery.results[0].elo - newElos[0]))
+    
+    return newElos
+
 }
 
 function getTheTime() {
@@ -283,14 +309,21 @@ function getTheTime() {
     return theTime
 }
 
-async function createSummary(matchResult, map, message, reacter) {
+async function createSummary(matchResult, map, message, reacter, newElos) {
 
     let winningPlayer
 
+    // array that will store two strings to show elo change, a + and a -, if p1 wins, its ['+','-'], or if p2 wins ['-','+']
+    let eloDeltaSign = []
+
     if (matchResult[2] === 1) {
         winningPlayer = message.author
+        eloDeltaSign.push('+')
+        eloDeltaSign.push('-')
     } else {
         winningPlayer = reacter
+        eloDeltaSign.push('-')
+        eloDeltaSign.push('+')
     } 
 
     console.log(`Winning player is: ${winningPlayer.tag}`)
@@ -301,6 +334,8 @@ async function createSummary(matchResult, map, message, reacter) {
         .setTitle('Match Result Summary')
         .setDescription(`${message.author} vs ${reacter}`)
         .addField(`Winner:`, `${winningPlayer}`)
+        .addField(`Elo Change:`,`${message.author}: ${newElos[0]} (${eloDeltaSign[0]}${newElos[2]})
+            ${reacter}: ${newElos[1]} (${eloDeltaSign[1]}${newElos[2]})`)
         .setFooter(`This message brought to you by EloBot - Created by Cepheid`)
         .addField(`Map`,`${map.name} (${map.abbreviation})`)
         .addField('Confirm:','If this result is correct, please respond to this message with ✅')
