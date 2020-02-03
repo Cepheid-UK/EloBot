@@ -6,7 +6,8 @@ const Elo = require('../util/calculate_elo')
 const CHALLENGE_TIMER = 5 * 1 * 1000; // length of time an open challenge is kept open - set to 10 mins for testing
 const MATCH_TIMER = 5 * 1 * 1000; // length of time an active game is kept open - set to 1 hour for testing
 const WARNING_TIMER = 15 * 1 * 1000; /// length of time for players to respond to the warning message
-const SUMMARY_TIMER = 15 * 1 * 1000; // length of time to keep the match summary up, in case match dispute resolution
+const FIRST_SUMMARY_TIMER = 10 * 1 * 1000; // length of time to keep the match summary up, in case match dispute resolution
+const SECOND_SUMMARY_TIMER = 10 * 1 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 
 exports.run = async (client, message, args, database) => {
     if (message.channel.name != 'elobot') return;
@@ -142,30 +143,67 @@ exports.run = async (client, message, args, database) => {
         let summaryMessage = await message.channel.send({embed: summaryEmbed})
         
         // summary filter
-        const summaryFilter = (reaction, user) => {
+        let summaryFilter = (reaction, user) => {
             return user.id === message.author.id || user.id === reacter.id &&
                 user.id != summaryMessage.author.id &&
                 ['✅','❓'].includes(reaction.emoji.name)
         }
 
-        summaryMessage.awaitReactions(summaryFilter, {max: 2, time: SUMMARY_TIMER, errors: 'Timeout'}).then(collected =>{
-
+        summaryMessage.awaitReactions(summaryFilter, {max: 1, time: FIRST_SUMMARY_TIMER, errors: 'Timeout'}).then(collected => {
             if (collected.keyArray().includes('❓')) {
-                // there is a dispute
-                console.log(`summary result disputed`)
+                // first reaction was ❓
+                console.log(`First reaction was a dispute`)
+
+                // add dispute resolution here.
+
             } else {
-                // there were two reactions, neither of which were ❓
-                console.log(`match confirmed`)
+                // first reaction was ✅
+                console.log(`First reaction was a confirmation`)
+
+                // find out who reacted, and remove them from the summaryFilter, make a "secondFilter"
+                let secondFilter
+
+                if (collected.last().users.last() === message.author) {
+                    secondFilter = (reaction, user) => {
+                        return user.id === reacter.id &&
+                            user.id != summaryMessage.author.id &&
+                            ['✅','❓'].includes(reaction.emoji.name)
+                    }
+                } else {
+                    secondFilter = (reaction, user) => {
+                        return user.id === message.author.id &&
+                            user.id != summaryMessage.author.id &&
+                            ['✅','❓'].includes(reaction.emoji.name)
+                    }
+                }
+                
+                // await second reaction
+                summaryMessage.awaitReactions(secondFilter, {max: 1, time: SECOND_SUMMARY_TIMER, errors: 'Timeout'}).then(collected =>{
+
+                    if (collected.keyArray().includes('❓')) {
+                        // second reaction was ❓
+                        console.log(`Second reaction was a dispute`)
+
+                        // add dispute resolution here
+                    } else {
+                        // second reaction was ✅
+                        console.log(`Second reaction was a confirmation`)
+                        // input results to DB
+                        updateElo(eloResult, message.author, reacter, database)
+                    }
+                }).catch(function (err) {
+                    // Time out on the summary
+                    if (err) throw err;
+                    // either one or no reactions were received.
+                    // 1. check to see if there was 1 reaction
+                    // 2. check to see if that was a ❓
+                    // 3. if yes, make a disputed_game row
+                    // 4. if no, make a completed_game row
+                })
             }
-        }).catch(function (err) {
-            // Time out on the summary
-            if (err) throw err;
-            // either one or no reactions were received.
-            // 1. check to see if there was 1 reaction
-            // 2. check to see if that was a ❓
-            // 3. if yes, make a disputed_game row
-            // 4. if no, make a completed_game row
         })
+
+       
 
         await summaryMessage.react('✅')
         summaryMessage.react('❓')
@@ -290,14 +328,20 @@ async function calcElo(input, database) {
     // calculate the change in elo
     let newElos = Elo.calculateElo(player1EloQuery.results[0].elo, player2EloQuery.results[0].elo, input[2])
 
-    // update the players rows in the database
-    await database.query({sql: `UPDATE players SET Elo=${newElos[0]} WHERE discord_id='${input[0]}'`})
-    await database.query({sql: `UPDATE players SET Elo=${newElos[1]} WHERE discord_id='${input[1]}'`})
-
     // absolute elo change
     newElos.push(Math.abs(player1EloQuery.results[0].elo - newElos[0]))
     
     return newElos
+
+}
+
+async function updateElo(input, challenger, reacter, database) {
+    // update the players rows in the database
+    await database.query({sql: `UPDATE players SET Elo=${input[0]} WHERE discord_id='${challenger.tag}'`})
+    await database.query({sql: `UPDATE players SET Elo=${input[1]} WHERE discord_id='${reacter.tag}'`})
+}
+
+async function createDisputedMatchRecord(results, map, challenger, reacter, database) {
 
 }
 
