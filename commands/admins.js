@@ -2,30 +2,27 @@
 
 const Discord = require('discord.js')
 
-exports.run = async (client, message, args, connection) => {
+exports.run = async (client, message, args, database) => {
 
-    admins = []
+    let admins = []
 
-    connection.query('SELECT * FROM admins',function(err, results) {
-        if (err) throw err;
+    let adminResults = await database.query({sql: `SELECT * FROM admins`})
 
-        for (i in results) {
-            admins.push(results[i].discord_id)
+    for (i in adminResults.results) {
+        admins.push(adminResults.results[i].discord_id)
+    }
+
+    let adminsString = admins[0]
+        
+    for (i in admins) {
+        if (i>0) {
+            adminsString = adminsString + '\n' + admins[i]
         }
+    }
 
-        adminsEmbed = new Discord.RichEmbed()
+    adminsEmbed = new Discord.RichEmbed()
         .setTitle('EloBot Ladder Admins:')
-    
-        let adminsString = admins[0]
+        .setDescription(adminsString)
         
-        for (i in admins) {
-            if (i>0) {
-                adminsString = adminsString + '\n' + admins[i]
-            }
-        }
-
-        adminsEmbed.setDescription(adminsString)
-        
-        message.channel.send({embed: adminsEmbed})
-    })
+    message.channel.send({embed: adminsEmbed})
 }
