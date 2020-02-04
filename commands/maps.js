@@ -2,16 +2,27 @@
 
 const Discord = require('discord.js')
 
-exports.run = async (client, message, args, level) => {
-    var embed = new Discord.RichEmbed()
+exports.run = async (client, message, args, database) => {
+
+    let mapQuery = await database.query({sql: `SELECT * FROM mappool;`})
+
+    let maps = []
+
+    for (i in mapQuery.results) {
+        maps.push([mapQuery.results[i].name, mapQuery.results[i].abbreviation])
+    }
+
+    var mapEmbed = new Discord.RichEmbed()
         .setTitle('EloBot Ladder Map pool')
-        .setDescription('Amazonia (AZ)\n'
-                    +   'Concealed Hill (CH)\n'
-                    +   'Echo Isles (EI)\n'
-                    +   'Last Refuge (LR)\n'
-                    +   'Northern Isles (NI)\n'
-                    +   'Terenas Stand LV (TSLV)\n'
-                    +   'Twisted Meadows (TM)')                    
         .setFooter('This message brought to you by EloBot - Created by Cepheid')
-    message.author.send({embed: embed})
+
+    let mapstring = ``
+    
+    for (i in maps) {
+        mapstring += `${maps[i][0]} (${maps[i][1]})\n`
+    }
+
+    mapEmbed.setDescription(mapstring)
+    
+    message.channel.send({embed: mapEmbed})
 }
