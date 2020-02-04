@@ -5,15 +5,11 @@ const Discord = require("Discord.js");
 const client = new Discord.Client();
 const token = require("./auth.json");
 const { MySQL } = require("mysql-promisify")
+const db_auth = require('./db_auth.json')
 
 const activeChannels = ['elobot', 'elobot-admin']
 
-const database = new MySQL({
-  host: "localhost",
-  user: "root",
-  password: "sunday21",
-  database: "ebdb"
-})
+const database = new MySQL(db_auth)
 
 // Client online
 client.on("ready", () => {

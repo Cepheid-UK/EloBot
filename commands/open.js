@@ -12,10 +12,7 @@ const SECOND_SUMMARY_TIMER = 10 * 1 * 1000; // length of time to keep the match 
 exports.run = async (client, message, args, database) => {
     if (message.channel.name != 'elobot') return;
     
-    
-    
     let authorQuery = await database.query({sql: `SELECT * FROM players WHERE discord_id='${message.author.tag}';`})
-    
 
     // check if the author is in the ladder
     if (authorQuery.results.length === 0) {
@@ -189,6 +186,7 @@ exports.run = async (client, message, args, database) => {
                         // second reaction was ✅
                         console.log(`Second reaction was a confirmation`)
                         // input results to DB
+                        confirmMatch(matchResult, eloResult, map.results[0].abbreviation, message.author, reacter, database)
                         updateElo(eloResult, message.author, reacter, database)
                     }
                 }).catch(function (err) {
@@ -255,37 +253,33 @@ exports.run = async (client, message, args, database) => {
 }
 
 async function confirmMatch(matchResult, eloResult, map, author, reacter, database) {
-    // completed_games table:
-//     +--------------------+------------+------+-----+---------+----------------+
-// | Field              | Type       | Null | Key | Default | Extra          |
-// +--------------------+------------+------+-----+---------+----------------+
-// | id                 | bigint(20) | NO   | PRI | NULL    | auto_increment |
-// | gametype           | int(2)     | NO   |     | 1       |                |
-// | player1            | char(128)  | NO   |     | NULL    |                |
-// | player1_newelo     | int(5)     | NO   |     | NULL    |                |
-// | player2            | char(128)  | NO   |     | NULL    |                |
-// | player2_newelo     | int(5)     | NO   |     | NULL    |                |
-// | winner             | char(128)  | NO   |     | NULL    |                |
-// | elo_change         | int(4)     | NO   |     | NULL    |                |
-// | map                | char(4)    | NO   |     | NULL    |                |
-// | time_of_challenge  | datetime   | NO   |     | NULL    |                |
-// | time_of_completion | datetime   | NO   |     | NULL    |                |
-// +--------------------+------------+------+-----+---------+----------------+
 
     // id is auto_increment
     // gametype is auto 1
     let player1 = author.tag
     let player1_newelo = eloResult[0]
-    let plyaer2 = reacter.tag
+    let player2 = reacter.tag
     let player2_newelo = eloResult[1]
     
     // convert winner to be the player who won i.e. p1 won, then winner = 1, p2 won, winner = 2
     let winner;
-    if (eloResult[2] === 0) {
+    if (matchResult[2] === 0) {
         winner = 1
     } else {
         winner = 2
     }
+
+    let elo_change = eloResult[2]
+
+    let time_of_completion = getTheTime()
+
+    try {
+        await database.query({sql: `INSERT INTO completed_games (player1, player1_newelo, player2, player2_newelo, winner, elo_change, map, time_of_completion)` +
+        `VALUES (${player1}, ${player1_newelo}, ${player2}, ${player2_newelo}, ${winner}, ${elo_change}, ${map}, ${time_of_completion})`})
+    } catch (err) {
+        if (err) throw err;
+    }
+    
 
     // get old elo for elo_change
 }
