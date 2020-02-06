@@ -59,7 +59,7 @@ time_of_challenge datetime NOT NULL);`
  player1_newelo int(5) NOT NULL,
  player2 char(128) NOT NULL,
  player2_newelo int(5) NOT NULL,
- winner char(128) NOT NULL,
+ winner int(1) NOT NULL,
  elo_change int(4) NOT NULL,
  map char(4) NOT NULL,
  time_of_completion DATETIME NOT NULL);`

@@ -3,8 +3,8 @@
 const Discord = require('discord.js')
 const Elo = require('../util/calculate_elo')
 
-const CHALLENGE_TIMER = 5 * 1 * 1000; // length of time an open challenge is kept open - set to 10 mins for testing
-const MATCH_TIMER = 5 * 1 * 1000; // length of time an active game is kept open - set to 1 hour for testing
+const CHALLENGE_TIMER = 15 * 60 * 1000; // length of time an open challenge is kept open - set to 10 mins for testing
+const MATCH_TIMER = 10 * 1 * 1000; // length of time an active game is kept open - set to 1 hour for testing
 const WARNING_TIMER = 15 * 1 * 1000; /// length of time for players to respond to the warning message
 const FIRST_SUMMARY_TIMER = 10 * 1 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 const SECOND_SUMMARY_TIMER = 10 * 1 * 1000; // length of time to keep the match summary up, in case match dispute resolution
@@ -124,8 +124,8 @@ exports.run = async (client, message, args, database) => {
         reportedEmoji = lastReaction.emoji.name
         database.query({sql: `DELETE FROM active_games WHERE player1='${reportingPlayer}' OR player2='${reportingPlayer}'`})
 
-        // pass a function: 1. player1 tag 2. player2 tag, 3. who reported the result 4. what they reported 5. link to the database so function can query
-        let matchResult = await processResult(message.author.tag, reacter.tag, reportingPlayer, reportedEmoji, database)
+        // get the result of the match in a convenient form from understanding who responded 
+        let matchResult = await processReaction(message.author.tag, reacter.tag, reportingPlayer, reportedEmoji, database)
 
         // get the elo result to put into the summary, and later into the completed games table
         let eloResult = await calcElo([message.author.tag, reacter.tag, matchResult[2]], database)
@@ -228,9 +228,6 @@ exports.run = async (client, message, args, database) => {
                 ['✅','❌'].includes(reaction.emoji.name) // support '❓' later
         }
 
-        let warningReportingPlayer
-        let warningReportedEmoji
-
         await warningMessage.awaitReactions(warningFilter, {max: 1, time: WARNING_TIMER, errors: ['Timeout']}).then(collected =>{
 
             let warningLastReaction = collected.last()
@@ -264,27 +261,54 @@ async function confirmMatch(matchResult, eloResult, map, author, reacter, databa
     // convert winner to be the player who won i.e. p1 won, then winner = 1, p2 won, winner = 2
     let winner;
     if (matchResult[2] === 0) {
-        winner = 1
-    } else {
         winner = 2
+    } else {
+        winner = 1
     }
 
     let elo_change = eloResult[2]
 
     let time_of_completion = getTheTime()
-
-    try {
-        await database.query({sql: `INSERT INTO completed_games (player1, player1_newelo, player2, player2_newelo, winner, elo_change, map, time_of_completion)` +
-        `VALUES (${player1}, ${player1_newelo}, ${player2}, ${player2_newelo}, ${winner}, ${elo_change}, ${map}, ${time_of_completion})`})
-    } catch (err) {
-        if (err) throw err;
-    }
     
-
-    // get old elo for elo_change
+    // this is disgusting, but template literal notation does not seem to work for this query for some reason.
+    await database.query({sql: `
+        INSERT INTO
+            completed_games
+                (
+                    player1,
+                    player1_newelo,
+                    player2,
+                    player2_newelo,
+                    winner,
+                    elo_change,
+                    map,
+                    time_of_completion
+                )
+                VALUES
+                (
+                    :player1,
+                    :player1_newelo,
+                    :player2,
+                    :player2_newelo,
+                    :winner,
+                    :elo_change,
+                    :map,
+                    :time_of_completion
+                )
+        `,
+    params: {
+        player1: player1,
+        player1_newelo: player1_newelo,
+        player2: player2,
+        player2_newelo: player2_newelo,
+        winner: winner,
+        elo_change: elo_change,
+        map: map,
+        time_of_completion: time_of_completion
+    }})
 }
 
-async function processResult(player1tag, player2tag, reportingPlayer, reportedEmoji, database) {
+async function processReaction(player1tag, player2tag, reportingPlayer, reportedEmoji, database) {
     // figures out who won from the reaction and then calls calcElo with that information
     
     let winner
