@@ -270,7 +270,7 @@ async function confirmMatch(matchResult, eloResult, map, author, reacter, databa
 
     let time_of_completion = getTheTime()
     
-    // this is disgusting, but template literal notation does not seem to work for this query for some reason.
+    // this looks disgusting, but template literal notation does not seem to work for this query for some reason.
     await database.query({sql: `
         INSERT INTO
             completed_games
