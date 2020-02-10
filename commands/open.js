@@ -188,6 +188,7 @@ exports.run = async (client, message, args, database) => {
                         // input results to DB
                         confirmMatch(matchResult, eloResult, map.results[0].abbreviation, message.author, reacter, database)
                         updateElo(eloResult, message.author, reacter, database)
+                        deleteOpenGames(message.author, database)
                     }
                 }).catch(function (err) {
                     // Time out on the summary
@@ -335,6 +336,18 @@ async function processReaction(player1tag, player2tag, reportingPlayer, reported
     }
 
     return [player1tag, player2tag, winner]
+}
+
+async function deleteOpenGames(author, database) {
+    // checks if there is a game open with the message author's name, if so, deletes it.
+
+    let openGamesQuery = await database.query({sql: `SELECT * FROM open_challenges WHERE discord_id='${author.tag}'`})
+
+    if (openGamesQuery.results[0].discord_id === undefined) {
+        return
+    } else {
+        await database.query({sql: `DELETE FROM open_challenges WHERE discord_id='${author.tag}'`})
+    }
 }
 
 async function calcElo(input, database) {
