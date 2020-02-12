@@ -9,8 +9,13 @@ const WARNING_TIMER = 15 * 1 * 1000; /// length of time for players to respond t
 const FIRST_SUMMARY_TIMER = 10 * 1 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 const SECOND_SUMMARY_TIMER = 10 * 1 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 
+
+
 exports.run = async (client, message, args, database) => {
     if (message.channel.name != 'elobot') return;
+
+    const kaiserCry = client.emojis.get("650860898176598037")
+    const trophy = client.emojis.get("")
     
     let authorQuery = await database.query({sql: `SELECT * FROM players WHERE discord_id='${message.author.tag}';`})
 
@@ -104,11 +109,11 @@ exports.run = async (client, message, args, database) => {
     const matchFilter = (reaction, user) => {
         return user.id === message.author.id || user.id === reacter.id &&
             user.id != matchMessage.author.id &&
-            ['✅','❌'].includes(reaction.emoji.name) // support '❓' later
+            ['🏆',`KaiserCry`].includes(reaction.emoji.name) // support '❓' later
     }
 
-    await matchMessage.react('✅')
-    matchMessage.react('❌')
+    await matchMessage.react('🏆')
+    matchMessage.react(kaiserCry)
 
     let reportingPlayer
     let reportedEmoji
@@ -137,7 +142,7 @@ exports.run = async (client, message, args, database) => {
         matchMessage.delete()
 
         // send the new embed
-        let summaryMessage = await message.channel.send({embed: summaryEmbed})
+        let summaryMessage = await message.channel.send(`${message.author} vs ${reacter}`, {embed: summaryEmbed})
         
         // summary filter
         let summaryFilter = (reaction, user) => {
@@ -146,16 +151,26 @@ exports.run = async (client, message, args, database) => {
                 ['✅','❓'].includes(reaction.emoji.name)
         }
 
+        let disputingUser
+
         summaryMessage.awaitReactions(summaryFilter, {max: 1, time: FIRST_SUMMARY_TIMER, errors: 'Timeout'}).then(collected => {
             if (collected.keyArray().includes('❓')) {
                 // first reaction was ❓
-                console.log(`First reaction was a dispute`)
 
-                // add dispute resolution here.
+                disputingUser = collected.last().users.last().tag
+
+                // add a record to the disputed games table
+                createDisputedMatchRecord(matchResult, map.results[0].abbreviation, message.author, reacter, disputingUser, database)
+
+                // delete the open games
+                deleteOpenGames(message.author, database)
+
+                // let the players know the match was disputed
+                message.channel.send(`The result of the match between ${message.author} and ${reacter} has been disputed by ${disputingUser}.
+                Please contact one of the admins (\`\`!admins\`\`) to have the result corrected.`)
 
             } else {
                 // first reaction was ✅
-                console.log(`First reaction was a confirmation`)
 
                 // find out who reacted, and remove them from the summaryFilter, make a "secondFilter"
                 let secondFilter
@@ -179,30 +194,37 @@ exports.run = async (client, message, args, database) => {
 
                     if (collected.keyArray().includes('❓')) {
                         // second reaction was ❓
-                        console.log(`Second reaction was a dispute`)
 
-                        // add dispute resolution here
+                        disputingUser = collected.last().users.last().tag
+
+                        // add a record to the disputed games table
+                        createDisputedMatchRecord(matchResult, map.results[0].abbreviation, message.author, reacter, disputingUser, database)
+
+                        // delete the open game
+                        deleteOpenGames(message.author, database)
+
+                        // let the players know the match was disputed
+                        message.channel.send(`The result of the match between ${message.author} and ${reacter} has been disputed by ${disputingUser}.
+                        Please contact one of the admins (\`\`!admins\`\`) to have the result corrected.`)
                     } else {
                         // second reaction was ✅
-                        console.log(`Second reaction was a confirmation`)
-                        // input results to DB
+
+                        // add result to the "completed_games" table
                         confirmMatch(matchResult, eloResult, map.results[0].abbreviation, message.author, reacter, database)
+
+                        // update the elo for the players on "players" table
                         updateElo(eloResult, message.author, reacter, database)
+
+                        // delete the record for the open game in "open_games" table
                         deleteOpenGames(message.author, database)
                     }
                 }).catch(function (err) {
                     // Time out on the summary
                     if (err) throw err;
-                    // either one or no reactions were received.
-                    // 1. check to see if there was 1 reaction
-                    // 2. check to see if that was a ❓
-                    // 3. if yes, make a disputed_game row
-                    // 4. if no, make a completed_game row
+                    
                 })
             }
         })
-
-       
 
         await summaryMessage.react('✅')
         summaryMessage.react('❓')
@@ -216,9 +238,8 @@ exports.run = async (client, message, args, database) => {
         console.log(`no reaction on the match`)
         // warn the players that they have not responded in time
         let warningMessage = await message.channel.send(`ATTENTION: ${message.author} and ${reacter}, No result has been reported for your match ` +
-        `on ${map.results[0].name}, please react to this message with ✅ to indicate that you won the match or ❌ to indicate that you lost, `+
-        `if no reaction is given within 15 minutes, this match shall be cancelled. If there was an issue with this match, `+
-        `please react with ❓ (Not yet supported) to have this match flagged for review by an admin.`)
+        `on ${map.results[0].name}, please react to this message with 🏆 to indicate that you won the match or ${kaiserCry} to indicate that you lost, `+
+        `if no reaction is given within 15 minutes, this match shall be cancelled`)
 
         await warningMessage.react('✅')
         warningMessage.react('❌')
@@ -251,6 +272,21 @@ exports.run = async (client, message, args, database) => {
 }
 
 async function confirmMatch(matchResult, eloResult, map, author, reacter, database) {
+
+// +--------------------+------------+------+-----+---------+----------------+
+// | Field              | Type       | Null | Key | Default | Extra          |
+// +--------------------+------------+------+-----+---------+----------------+
+// | id                 | bigint(20) | NO   | PRI | NULL    | auto_increment |
+// | gametype           | int(2)     | NO   |     | 1       |                |
+// | player1            | char(128)  | NO   |     | NULL    |                |
+// | player1_newelo     | int(5)     | NO   |     | NULL    |                |
+// | player2            | char(128)  | NO   |     | NULL    |                |
+// | player2_newelo     | int(5)     | NO   |     | NULL    |                |
+// | winner             | int(1)     | NO   |     | NULL    |                |
+// | elo_change         | int(4)     | NO   |     | NULL    |                |
+// | map                | char(4)    | NO   |     | NULL    |                |
+// | time_of_completion | datetime   | NO   |     | NULL    |                |
+// +--------------------+------------+------+-----+---------+----------------+
 
     // id is auto_increment
     // gametype is auto 1
@@ -317,7 +353,7 @@ async function processReaction(player1tag, player2tag, reportingPlayer, reported
     // could use conditional ternary operators to make this shorter, but this is more readable
     if (player1tag === reportingPlayer) {
         // player 1 reacted
-        if (reportedEmoji === '✅') {
+        if (reportedEmoji === '🏆') {
             // player 1 won
             winner = 1
         } else {
@@ -326,7 +362,7 @@ async function processReaction(player1tag, player2tag, reportingPlayer, reported
         }
     } else {
         // player 2 reacted
-        if (reportedEmoji === '✅') {
+        if (reportedEmoji === '🏆') {
             // player 2 won
             winner = 0
         } else {
@@ -343,9 +379,7 @@ async function deleteOpenGames(author, database) {
 
     let openGamesQuery = await database.query({sql: `SELECT * FROM open_challenges WHERE discord_id='${author.tag}'`})
 
-    if (openGamesQuery.results[0].discord_id === undefined) {
-        return
-    } else {
+    if (!openGamesQuery.results[0].discord_id === undefined) {
         await database.query({sql: `DELETE FROM open_challenges WHERE discord_id='${author.tag}'`})
     }
 }
@@ -372,7 +406,61 @@ async function updateElo(input, challenger, reacter, database) {
     await database.query({sql: `UPDATE players SET Elo=${input[1]} WHERE discord_id='${reacter.tag}'`})
 }
 
-async function createDisputedMatchRecord(results, map, challenger, reacter, database) {
+async function createDisputedMatchRecord(matchResult, map, challenger, reacter, disputingUser, database) {
+// +-----------------+------------+------+-----+---------+----------------+
+// | Field           | Type       | Null | Key | Default | Extra          |
+// +-----------------+------------+------+-----+---------+----------------+
+// | id              | bigint(20) | NO   | PRI | NULL    | auto_increment |
+// | gametype        | int(2)     | NO   |     | 1       |                |
+// | player1         | char(128)  | NO   |     | NULL    |                |
+// | player2         | char(128)  | NO   |     | NULL    |                |
+// | proposed_winner | char(128)  | NO   |     | NULL    |                |
+// | disputing_user  | char(128)  | NO   |     | NULL    |                |
+// | map             | char(4)    | NO   |     | NULL    |                |
+// | time_of_dispute | datetime   | NO   |     | NULL    |                |
+// +-----------------+------------+------+-----+---------+----------------+
+
+    let player1 = matchResult[0]
+    let player2 = matchResult[1]
+    
+    // convert winner to be the player who won i.e. p1 won, then winner = 1, p2 won, winner = 2
+    let proposed_winner;
+    if (matchResult[2] === 0) {
+        proposed_winner = 2
+    } else {
+        proposed_winner = 1
+    }
+
+    let time_of_dispute = getTheTime()
+
+    await database.query({sql: `
+        INSERT INTO 
+            disputed_games (
+                player1, 
+                player2, 
+                proposed_winner, 
+                disputing_user, 
+                map, 
+                time_of_dispute
+            )
+        VALUES (
+                :player1,
+                :player2,
+                :proposed_winner,
+                :disputing_user,
+                :map,
+                :time_of_dispute
+            );`, 
+        params: {
+            player1: player1,
+            player2: player2,
+            proposed_winner: proposed_winner,
+            disputing_user: disputingUser,
+            map: map,
+            time_of_dispute: time_of_dispute
+        }
+    })
+    
 
 }
 
@@ -401,7 +489,7 @@ async function createSummary(matchResult, map, message, reacter, newElos) {
         eloDeltaSign.push('+')
     } 
 
-    console.log(`Winning player is: ${winningPlayer.tag}`)
+    //console.log(`Winning player is: ${winningPlayer.tag}`)
 
     // creates a match summary embed
     return new Discord.RichEmbed()

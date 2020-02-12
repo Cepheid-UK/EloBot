@@ -3,7 +3,7 @@
 
 const db_auth = require('./db_auth.json')
 
-const { MySQL } = require("mysql-promisify")
+const { MySQL } = require('mysql-promisify')
 
 const database = new MySQL(db_auth)
 
@@ -11,10 +11,10 @@ let players_drop =
 `DROP TABLE IF EXISTS players;`
 
 let players =
-`CREATE TABLE players (` +
-`id bigint NOT NULL PRIMARY KEY AUTO_INCREMENT,` +
-`elo int NOT NULL,` +
-`discord_id char(128) NOT NULL);`
+`CREATE TABLE players (
+id bigint NOT NULL PRIMARY KEY AUTO_INCREMENT,
+elo int NOT NULL,
+discord_id char(128) NOT NULL);`
 
 let active_games_drop =
 `DROP TABLE IF EXISTS active_games;`
