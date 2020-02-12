@@ -1,7 +1,7 @@
 ///// ----- EloBot Command Handler ----- /////
 
 const prefix = ('!');
-const Discord = require("Discord.js");
+const Discord = require("discord.js");
 const client = new Discord.Client();
 const token = require("./auth.json");
 const { MySQL } = require("mysql-promisify")
