@@ -2,6 +2,10 @@
 
 exports.run = async (client, message, args, database) => {
 
+    if (message.channel.name != 'elobot') {
+        return;
+    }
+
     const embed = {
         "title": "EloBot Ladder",
         "description": "Hello and welcome to the EloBot ladder, hosted by me, EloBot.",
@@ -18,7 +22,7 @@ exports.run = async (client, message, args, database) => {
           },
           {
             "name": "What does it do?",
-            "value": "It allows you to challenge other players who are signed up to a match, and when you report on the result of the match, will update your ELO value."
+            "value": "It allows you to challenge other players who are signed up to the ladder, and when you report on the result of the match, will update your ELO value."
           },
           {
             "name": "How does it work?",

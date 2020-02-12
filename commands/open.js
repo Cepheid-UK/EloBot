@@ -15,7 +15,6 @@ exports.run = async (client, message, args, database) => {
     if (message.channel.name != 'elobot') return;
 
     const kaiserCry = client.emojis.get("650860898176598037")
-    const trophy = client.emojis.get("")
     
     let authorQuery = await database.query({sql: `SELECT * FROM players WHERE discord_id='${message.author.tag}';`})
 
