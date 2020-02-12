@@ -4,7 +4,7 @@ const Discord = require('discord.js')
 const Elo = require('../util/calculate_elo')
 
 const CHALLENGE_TIMER = 15 * 60 * 1000; // length of time an open challenge is kept open - set to 10 mins for testing
-const MATCH_TIMER = 10 * 1 * 1000; // length of time an active game is kept open - set to 1 hour for testing
+const MATCH_TIMER = 60 * 60 * 1000; // length of time an active game is kept open - set to 1 hour for testing
 const WARNING_TIMER = 15 * 1 * 1000; /// length of time for players to respond to the warning message
 const FIRST_SUMMARY_TIMER = 10 * 1 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 const SECOND_SUMMARY_TIMER = 10 * 1 * 1000; // length of time to keep the match summary up, in case match dispute resolution
@@ -235,35 +235,35 @@ exports.run = async (client, message, args, database) => {
 
     }).catch(async function (err) {
         if (err) throw err;
-        console.log(`no reaction on the match`)
-        // warn the players that they have not responded in time
-        let warningMessage = await message.channel.send(`ATTENTION: ${message.author} and ${reacter}, No result has been reported for your match ` +
-        `on ${map.results[0].name}, please react to this message with 🏆 to indicate that you won the match or ${kaiserCry} to indicate that you lost, `+
-        `if no reaction is given within 15 minutes, this match shall be cancelled`)
+        // console.log(`no reaction on the match`)
+        // // warn the players that they have not responded in time
+        // let warningMessage = await message.channel.send(`ATTENTION: ${message.author} and ${reacter}, No result has been reported for your match ` +
+        // `on ${map.results[0].name}, please react to this message with 🏆 to indicate that you won the match or ${kaiserCry} to indicate that you lost, `+
+        // `if no reaction is given within 15 minutes, this match shall be cancelled`)
 
-        await warningMessage.react('✅')
-        warningMessage.react('❌')
+        // await warningMessage.react('✅')
+        // warningMessage.react('❌')
 
-        const warningFilter = (reaction, user) => {
-            return user.id === message.author.id || user.id === reacter.id &&
-                user.id != warningMessage.author.id &&
-                ['✅','❌'].includes(reaction.emoji.name) // support '❓' later
-        }
+        // const warningFilter = (reaction, user) => {
+        //     return user.id === message.author.id || user.id === reacter.id &&
+        //         user.id != warningMessage.author.id &&
+        //         ['✅','❌'].includes(reaction.emoji.name) // support '❓' later
+        // }
 
-        await warningMessage.awaitReactions(warningFilter, {max: 1, time: WARNING_TIMER, errors: ['Timeout']}).then(collected =>{
+        // await warningMessage.awaitReactions(warningFilter, {max: 1, time: WARNING_TIMER, errors: ['Timeout']}).then(collected =>{
 
-            let warningLastReaction = collected.last()
-            // as with match: since the bot adds reactions, collected will always contain a MessageReaction, check to ensure it's actually a player:
-            if (warningLastReaction.users.last().id != message.author.id && warningLastReaction.users.last().id != reacter.id) { return };
+        //     let warningLastReaction = collected.last()
+        //     // as with match: since the bot adds reactions, collected will always contain a MessageReaction, check to ensure it's actually a player:
+        //     if (warningLastReaction.users.last().id != message.author.id && warningLastReaction.users.last().id != reacter.id) { return };
 
-            // report on the result as per match reaction
-            // function to calculate winner from the reaction
-            // function to send the result to the completed_games table
+        //     // report on the result as per match reaction
+        //     // function to calculate winner from the reaction
+        //     // function to send the result to the completed_games table
 
-        }).catch(collected => {
-            if (err) throw err;
-            console.log(`Warning Timeout`)
-        })
+        // }).catch(collected => {
+        //     if (err) throw err;
+        //     console.log(`Warning Timeout`)
+        // })
         
     })
 
