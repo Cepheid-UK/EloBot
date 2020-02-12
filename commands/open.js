@@ -6,8 +6,8 @@ const Elo = require('../util/calculate_elo')
 const CHALLENGE_TIMER = 15 * 60 * 1000; // length of time an open challenge is kept open - set to 10 mins for testing
 const MATCH_TIMER = 60 * 60 * 1000; // length of time an active game is kept open - set to 1 hour for testing
 const WARNING_TIMER = 15 * 1 * 1000; /// length of time for players to respond to the warning message
-const FIRST_SUMMARY_TIMER = 10 * 1 * 1000; // length of time to keep the match summary up, in case match dispute resolution
-const SECOND_SUMMARY_TIMER = 10 * 1 * 1000; // length of time to keep the match summary up, in case match dispute resolution
+const FIRST_SUMMARY_TIMER = 15 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
+const SECOND_SUMMARY_TIMER = 15 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 
 
 
