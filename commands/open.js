@@ -122,7 +122,7 @@ exports.run = async (client, message, args, database) => {
 
     await matchMessage.awaitReactions(matchFilter, {max: 1, time: MATCH_TIMER, errors: ['Timeout']}).then(async collected => {
 
-        if (collected.last().length === undefined) throw err;
+        if (collected.last().length === undefined) console.error;
 
         let lastReaction = collected.last()
         reportingPlayer = lastReaction.users.last().tag
@@ -226,7 +226,7 @@ exports.run = async (client, message, args, database) => {
 
                         summaryMessage.clearReactions()
                     }
-                }).catch(function (err) {
+                }).catch(async function (err) {
                     // Time out on the summary
                     if (err) throw err;
 
@@ -244,6 +244,8 @@ exports.run = async (client, message, args, database) => {
         summaryMessage.react('❓')
 
     }).catch(async function (err) {
+
+        if (err) throw err;
 
         // There was no report on the match
         message.channel.send(`There was no response to the match between ${message.author} and ${reacter} on ${map.results[0].name}. The match has been deleted.`)
