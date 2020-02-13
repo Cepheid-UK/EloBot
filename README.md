@@ -1,6 +1,6 @@
 # EloBot
-Elo ladder system that can be used on a Discord Server.
+Elo rating system for use with Discord.
 
-Allows players to sign up to the ladder, open challenges that can be accepted by others, report on the results, flag a game as disputed for an admin to resolve, and calculate an elo change.
+Players can sign up to the ladder, open challenges with other players, have the match results recorded. Admin functionality. If there is a dispute, the game will be sent to the database for admin review.
 
-Built with NodeJS and MySQL.
+Built with DiscordJS, NodeJS and MySQL.

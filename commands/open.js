@@ -4,10 +4,10 @@ const Discord = require('discord.js')
 const Elo = require('../util/calculate_elo')
 
 const CHALLENGE_TIMER = 15 * 60 * 1000; // length of time an open challenge is kept open - set to 10 mins for testing
-const MATCH_TIMER = 60 * 60 * 1000; // length of time an active game is kept open - set to 1 hour for testing
+const MATCH_TIMER = 5000//75 * 60 * 1000; // length of time an active game is kept open - set to 1 hour for testing
 const WARNING_TIMER = 15 * 1 * 1000; /// length of time for players to respond to the warning message
-const FIRST_SUMMARY_TIMER = 15 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
-const SECOND_SUMMARY_TIMER = 15 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
+const FIRST_SUMMARY_TIMER = 5 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
+const SECOND_SUMMARY_TIMER = 5 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 
 
 
@@ -56,12 +56,15 @@ exports.run = async (client, message, args, database) => {
         .setFooter('This message brought to you by EloBot - Created by Cepheid#6411')
 
     let challengeMessage = await message.channel.send({embed: challengeEmbed})
-    
-    // await reactions
+
+    let busyPlayers = await getBusyPlayers(database)
+
+    // await reactions on challenge
     const challengeFilter = (reaction, user) => {
         return reaction.emoji.name === '✅' && // 1. correct reaction
         user.id != message.author.id && // 2. not the challenger
-        ladderPlayers.includes(user.tag); // 3. reacter is part of the ladder
+        ladderPlayers.includes(user.tag) && // 3. reacter is part of the ladder
+        !busyPlayers.includes(user.tag) // 4. reacter doesn't already have an active game or open challenge
     }
 
     let reacter
@@ -75,7 +78,7 @@ exports.run = async (client, message, args, database) => {
         challengeAccepted = true;
     }).catch(collected => {
         database.query({sql: `DELETE FROM open_challenges WHERE discord_id='${message.author.tag}'`})
-        message.channel.send(`Nobody responded to the open challenge in time`)
+        message.channel.send(`Nobody responded to ${message.author}'s the open challenge in time`)
         challengeMessage.delete()
         challengeAccepted = false;
     })
@@ -106,9 +109,9 @@ exports.run = async (client, message, args, database) => {
     
     // await reactions for match result
     const matchFilter = (reaction, user) => {
-        return user.id === message.author.id || user.id === reacter.id &&
-            user.id != matchMessage.author.id &&
-            ['🏆',`KaiserCry`].includes(reaction.emoji.name) // support '❓' later
+        return user.id === message.author.id || user.id === reacter.id && // 1. is one of the players in the game
+            !user.bot && // 2. not a bot
+            ['🏆',`KaiserCry`].includes(reaction.emoji.name) // 3. is reacting with a valid response
     }
 
     await matchMessage.react('🏆')
@@ -119,17 +122,15 @@ exports.run = async (client, message, args, database) => {
 
     await matchMessage.awaitReactions(matchFilter, {max: 1, time: MATCH_TIMER, errors: ['Timeout']}).then(async collected => {
 
+        if (collected.last().length === undefined) throw err;
+
         let lastReaction = collected.last()
-
-        // since the bot adds reactions, collected will always contain a MessageReaction, so check to ensure it's actually a player:
-        //if (lastReaction.users.last().id != message.author.id && lastReaction.users.last().id != reacter.id) { return };
-
         reportingPlayer = lastReaction.users.last().tag
-        reportedEmoji = lastReaction.emoji.name
+
         database.query({sql: `DELETE FROM active_games WHERE player1='${reportingPlayer}' OR player2='${reportingPlayer}'`})
 
         // get the result of the match in a convenient form from understanding who responded 
-        let matchResult = await processReaction(message.author.tag, reacter.tag, reportingPlayer, reportedEmoji, database)
+        let matchResult = await processReaction(message.author.tag, reacter.tag, reportingPlayer, lastReaction.emoji.name, database)
 
         // get the elo result to put into the summary, and later into the completed games table
         let eloResult = await calcElo([message.author.tag, reacter.tag, matchResult[2]], database)
@@ -162,11 +163,13 @@ exports.run = async (client, message, args, database) => {
                 createDisputedMatchRecord(matchResult, map.results[0].abbreviation, message.author, reacter, disputingUser, database)
 
                 // delete the open games
-                deleteOpenGames(message.author, database)
+                deleteOpenChallenge(message.author, database)
 
                 // let the players know the match was disputed
                 message.channel.send(`The result of the match between ${message.author} and ${reacter} has been disputed by ${disputingUser}.
                 Please contact one of the admins (\`\`!admins\`\`) to have the result corrected.`)
+
+                summaryMessage.clearReactions()
 
             } else {
                 // first reaction was ✅
@@ -200,11 +203,15 @@ exports.run = async (client, message, args, database) => {
                         createDisputedMatchRecord(matchResult, map.results[0].abbreviation, message.author, reacter, disputingUser, database)
 
                         // delete the open game
-                        deleteOpenGames(message.author, database)
+                        deleteOpenChallenge(message.author, database)
+
+                        // delete the active game
 
                         // let the players know the match was disputed
                         message.channel.send(`The result of the match between ${message.author} and ${reacter} has been disputed by ${disputingUser}.
                         Please contact one of the admins (\`\`!admins\`\`) to have the result corrected.`)
+
+                        summaryMessage.clearReactions()
                     } else {
                         // second reaction was ✅
 
@@ -215,11 +222,19 @@ exports.run = async (client, message, args, database) => {
                         updateElo(eloResult, message.author, reacter, database)
 
                         // delete the record for the open game in "open_games" table
-                        deleteOpenGames(message.author, database)
+                        deleteOpenChallenge(message.author, database)
+
+                        summaryMessage.clearReactions()
                     }
                 }).catch(function (err) {
                     // Time out on the summary
                     if (err) throw err;
+
+                    // add result to the "completed_games" table
+                    confirmMatch(matchResult, eloResult, map.results[0].abbreviation, message.author, reacter, database)
+
+                    // update the elo for the players on "players" table
+                    updateElo(eloResult, message.author, reacter, database)
                     
                 })
             }
@@ -228,13 +243,21 @@ exports.run = async (client, message, args, database) => {
         await summaryMessage.react('✅')
         summaryMessage.react('❓')
 
-        //await processSummary(message, summaryMessage, reacter, map.results[0], database)
-
-        //calcElo([message.author.tag, reacter.tag, winner], database)
-
     }).catch(async function (err) {
-        if (err) throw err;
-        // console.log(`no reaction on the match`)
+
+        // There was no report on the match
+        message.channel.send(`There was no response to the match between ${message.author} and ${reacter} on ${map.results[0].name}. The match has been deleted.`)
+
+        // delete the open challenge
+        deleteOpenChallenge(message.author, database)
+
+        // delete the active game
+        deleteActiveGame(message.author.tag, database)
+
+        // delete the match embed
+        matchMessage.delete()
+        
+        // TBD: Create a last chance for the players to react.
         // // warn the players that they have not responded in time
         // let warningMessage = await message.channel.send(`ATTENTION: ${message.author} and ${reacter}, No result has been reported for your match ` +
         // `on ${map.results[0].name}, please react to this message with 🏆 to indicate that you won the match or ${kaiserCry} to indicate that you lost, `+
@@ -373,14 +396,8 @@ async function processReaction(player1tag, player2tag, reportingPlayer, reported
     return [player1tag, player2tag, winner]
 }
 
-async function deleteOpenGames(author, database) {
-    // checks if there is a game open with the message author's name, if so, deletes it.
-
-    let openGamesQuery = await database.query({sql: `SELECT * FROM open_challenges WHERE discord_id='${author.tag}'`})
-
-    if (!openGamesQuery.results[0].discord_id === undefined) {
-        await database.query({sql: `DELETE FROM open_challenges WHERE discord_id='${author.tag}'`})
-    }
+async function deleteOpenChallenge(author, database) {
+    await database.query({sql: `DELETE FROM open_challenges WHERE discord_id='${author.tag}'`})
 }
 
 async function calcElo(input, database) {
@@ -488,8 +505,6 @@ async function createSummary(matchResult, map, message, reacter, newElos) {
         eloDeltaSign.push('+')
     } 
 
-    //console.log(`Winning player is: ${winningPlayer.tag}`)
-
     // creates a match summary embed
     return new Discord.RichEmbed()
         .setColor('#0099ff')
@@ -502,4 +517,25 @@ async function createSummary(matchResult, map, message, reacter, newElos) {
         .addField(`Map`,`${map.name} (${map.abbreviation})`)
         .addField('Confirm:','If this result is correct, please respond to this message with ✅')
         .addField('Dispute:','If this result is not correct, please respond to this message with ❓')
+}
+
+async function getBusyPlayers(database) {
+    let challengeQuery = await database.query({sql: `SELECT * FROM open_challenges`})
+    let activeQuery = await database.query({sql: `SELECT * FROM active_games`})
+
+    let playerList = []
+
+    for (i in challengeQuery.results) {
+        playerList.push(challengeQuery.results[i].discord_id)
+    }
+
+    for (i in activeQuery.results) {
+        playerList.push(challengeQuery.results[i].discord_id)
+    }
+
+    return playerList
+}
+
+async function deleteActiveGame(player1, database) {
+    await database.query({sql: `DELETE FROM active_games WHERE player1='${player1}'`})
 }

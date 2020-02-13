@@ -1,10 +1,8 @@
-// signup for the ELO system
+// Help command to show users how it works.
 
 exports.run = async (client, message, args, database) => {
 
-    if (message.channel.name != 'elobot') {
-        return;
-    }
+    if (message.channel.name != 'elobot') return;
 
     const embed = {
         "title": "EloBot Ladder",
@@ -13,7 +11,7 @@ exports.run = async (client, message, args, database) => {
         "timestamp": "2020-02-12T15:54:32.736Z",
         "footer": {
           "icon_url": "https://cdn.discordapp.com/embed/avatars/0.png",
-          "text": "footer text"
+          "text": "EloBot - Created by Cepheid"
         },
         "fields": [
           {
@@ -35,11 +33,14 @@ exports.run = async (client, message, args, database) => {
           {
             "name": "How does ELO rating work?",
             "value": "In the simplest terms, if you win, you gain points, if you lose, you lose points. If you beat someone much higher rating than you, you win much more points than if you beat someone lower than you.\n\nFor more details, see the wikipedia entry:\nhttps://en.wikipedia.org/wiki/Elo_rating_system",
-            "inline": true
+          },
+          {
+            "name": "Who is in charge around here?",
+            "value": "If you need some assistance, try the \`\`!admins\`\` command to find someone who can help.",
           }
         ]
       };
-      message.channel.send({ embed });
+      message.channel.send({embed: embed});
 
 
 }
