@@ -1,6 +1,7 @@
 # bot key
 auth.json
 db_auth.json
+test_auth.json
 
 # Logs
 logs
