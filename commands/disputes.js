@@ -38,15 +38,23 @@ exports.run = async (client, message, args, database) => {
         .setTimestamp()
     
     for (i in disputes) {
+
+        if (i === 10) {
+            message.channel.send(`Resolve some of the disputes above to make space for additional disptues to be shown`)
+            return
+        }
+
         let dispute = disputes[i]
 
+        dispute.timestamp
+
         disputesEmbed.addField(`ID: ${dispute.id}`,`
-            P1: ${dispute.player1}
-            P2: ${dispute.player2}
+            Player 1: ${dispute.player1}
+            Player 2: ${dispute.player2}
             Disputer: ${dispute.disputedBy}
             Map: ${dispute.map}
             Time: ${dispute.timestamp}
-            Reported winner: ${dispute.reportedWinner}`)
+            Reported Player winner: ${dispute.reportedWinner}`)
     }
 
     message.channel.send({embed: disputesEmbed})
