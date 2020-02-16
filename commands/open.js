@@ -4,15 +4,13 @@ const Discord = require('discord.js')
 const Elo = require('../util/calculate_elo')
 
 const CHALLENGE_TIMER = 15 * 60 * 1000; // length of time an open challenge is kept open - set to 10 mins for testing
-const MATCH_TIMER = 75 * 60 * 1000; // length of time an active game is kept open - set to 1 hour for testing
+const MATCH_TIMER = 5000 //75 * 60 * 1000; // length of time an active game is kept open - set to 1 hour for testing
 const WARNING_TIMER = 15 * 1 * 1000; /// length of time for players to respond to the warning message
 const FIRST_SUMMARY_TIMER = 5 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 const SECOND_SUMMARY_TIMER = 5 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 
-
-
 exports.run = async (client, message, args, database) => {
-    if (message.channel.name != 'elobot') return;
+    if (message.channel.name != 'elobot-test') return;
 
     const kaiserCry = client.emojis.get("650860898176598037")
     
@@ -74,11 +72,13 @@ exports.run = async (client, message, args, database) => {
 
     // await reactions on the challenge
     await challengeMessage.awaitReactions(challengeFilter, {max: 1, time: CHALLENGE_TIMER, errors: ['Timeout']}).then(collected => {
+        
         reacter = collected.last().users.last()
         challengeAccepted = true;
     }).catch(collected => {
-        database.query({sql: `DELETE FROM open_challenges WHERE discord_id='${message.author.tag}'`})
-        message.channel.send(`Nobody responded to ${message.author}'s the open challenge in time`)
+        
+        deleteOpenChallenge(message.author, database)
+        message.channel.send(`Nobody responded to ${message.author}'s open challenge in time`)
         challengeMessage.delete()
         challengeAccepted = false;
     })
@@ -102,8 +102,9 @@ exports.run = async (client, message, args, database) => {
         .setDescription(`${message.author} vs ${reacter}`)
         .setFooter(`This message brought to you by EloBot - Created by Cepheid`)
         .addField(`Map`,`${map.results[0].name} (${map.results[0].abbreviation})`)
-        .addField('Report:','To report on the result of this match, please indicate whether you won - ✅ or lost - ❌ the match by reacting to this message. '
-            + 'If there is an issue with this game, react with ❓ to have this match flagged for review by an admin')
+        .addField(`Report:`,`To report on the result of this match, please indicate whether you won - 🏆 or lost - ${kaiserCry} the match by reacting to this message. 
+            \nIf there is an issue with this game, react with ❓ to have this match flagged for review by an admin.
+            \nIf both players wish to cancel the match, they can react with 🚫`)
     challengeMessage.delete()
     matchMessage = await message.channel.send(`${message.author} vs ${reacter}`,{embed: matchEmbed})
     
@@ -111,21 +112,33 @@ exports.run = async (client, message, args, database) => {
     const matchFilter = (reaction, user) => {
         return user.id === message.author.id || user.id === reacter.id && // 1. is one of the players in the game
             !user.bot && // 2. not a bot
-            ['🏆',`KaiserCry`].includes(reaction.emoji.name) // 3. is reacting with a valid response
+            ['🏆',`KaiserCry`, `🚫`].includes(reaction.emoji.name) // 3. is reacting with a valid response
     }
 
     await matchMessage.react('🏆')
-    matchMessage.react(kaiserCry)
+    await matchMessage.react(kaiserCry)
+    matchMessage.react('🚫')
 
     let reportingPlayer
     let reportedEmoji
 
+    let cancelledMatch = false;
+
     await matchMessage.awaitReactions(matchFilter, {max: 1, time: MATCH_TIMER, errors: ['Timeout']}).then(async collected => {
 
-        if (collected.last().length === undefined) console.error;
+        //if (collected.last().length === undefined) throw err;
 
         let lastReaction = collected.last()
         reportingPlayer = lastReaction.users.last().tag
+
+        console.log(lastReaction.emoji.name)
+
+        if (lastReaction.emoji.name === '🚫') {
+            // match was cancelled
+            cancelledMatch = true;
+
+            throw 'Match was cancelled'
+        }
 
         database.query({sql: `DELETE FROM active_games WHERE player1='${reportingPlayer}' OR player2='${reportingPlayer}'`})
 
@@ -245,10 +258,14 @@ exports.run = async (client, message, args, database) => {
 
     }).catch(async function (err) {
 
-        if (err) throw err;
+        if (err) console.log(err);
 
         // There was no report on the match
-        message.channel.send(`There was no response to the match between ${message.author} and ${reacter} on ${map.results[0].name}. The match has been deleted.`)
+        if (cancelledMatch) {
+            message.channel.send(`The match between ${message.author} and ${reacter} was cancelled. \nThe match has been deleted.`)
+        } else {
+            message.channel.send(`There was no response to the match between ${message.author} and ${reacter} on ${map.results[0].name}. \nThe match has been deleted.`)
+        }
 
         // delete the open challenge
         deleteOpenChallenge(message.author, database)
@@ -258,36 +275,6 @@ exports.run = async (client, message, args, database) => {
 
         // delete the match embed
         matchMessage.delete()
-        
-        // TBD: Create a last chance for the players to react.
-        // // warn the players that they have not responded in time
-        // let warningMessage = await message.channel.send(`ATTENTION: ${message.author} and ${reacter}, No result has been reported for your match ` +
-        // `on ${map.results[0].name}, please react to this message with 🏆 to indicate that you won the match or ${kaiserCry} to indicate that you lost, `+
-        // `if no reaction is given within 15 minutes, this match shall be cancelled`)
-
-        // await warningMessage.react('✅')
-        // warningMessage.react('❌')
-
-        // const warningFilter = (reaction, user) => {
-        //     return user.id === message.author.id || user.id === reacter.id &&
-        //         user.id != warningMessage.author.id &&
-        //         ['✅','❌'].includes(reaction.emoji.name) // support '❓' later
-        // }
-
-        // await warningMessage.awaitReactions(warningFilter, {max: 1, time: WARNING_TIMER, errors: ['Timeout']}).then(collected =>{
-
-        //     let warningLastReaction = collected.last()
-        //     // as with match: since the bot adds reactions, collected will always contain a MessageReaction, check to ensure it's actually a player:
-        //     if (warningLastReaction.users.last().id != message.author.id && warningLastReaction.users.last().id != reacter.id) { return };
-
-        //     // report on the result as per match reaction
-        //     // function to calculate winner from the reaction
-        //     // function to send the result to the completed_games table
-
-        // }).catch(collected => {
-        //     if (err) throw err;
-        //     console.log(`Warning Timeout`)
-        // })
         
     })
 
