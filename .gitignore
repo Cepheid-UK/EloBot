@@ -2,6 +2,7 @@
 auth.json
 db_auth.json
 test_auth.json
+test.js
 
 # Logs
 logs

@@ -10,7 +10,7 @@ const FIRST_SUMMARY_TIMER = 5 * 60 * 1000; // length of time to keep the match s
 const SECOND_SUMMARY_TIMER = 5 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 
 exports.run = async (client, message, args, database) => {
-    if (message.channel.name != 'elobot-test') return;
+    if (message.channel.name != 'elobot') return;
 
     const kaiserCry = client.emojis.get("650860898176598037")
     
