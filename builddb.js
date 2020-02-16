@@ -14,7 +14,9 @@ let players =
 `CREATE TABLE players (
 id bigint NOT NULL PRIMARY KEY AUTO_INCREMENT,
 elo int NOT NULL,
-discord_id char(128) NOT NULL);`
+discord_id char(128) NOT NULL,
+games_played int(16) NOT NULL DEFAULT 0,
+wins int(16) NOT NULL DEFAULT 0);`
 
 let active_games_drop =
 `DROP TABLE IF EXISTS active_games;`
