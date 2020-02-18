@@ -9,8 +9,8 @@ const WARNING_TIMER = 15 * 1 * 1000; /// length of time for players to respond t
 const FIRST_SUMMARY_TIMER = 5 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 const SECOND_SUMMARY_TIMER = 5 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 
-exports.run = async (client, message, args, database) => {
-    if (message.channel.name != 'elobot-test') return;
+exports.run = async (client, message, args, database, channels) => {
+    if (!channels.users.includes(message.channel.name)) return;
 
     const kaiserCry = client.emojis.get("650860898176598037")
     

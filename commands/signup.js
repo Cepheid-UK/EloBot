@@ -1,6 +1,8 @@
 // signup for the ELO system
 
-exports.run = async (client, message, args, database) => {
+exports.run = async (client, message, args, database, channels) => {
+
+  if (!channels.users.includes(message.channel.name)) return;
 
   // get row from db using the persons discord tag
   let playerExists = await database.query({sql:`SELECT * FROM players WHERE discord_id='${message.author.tag}';`})

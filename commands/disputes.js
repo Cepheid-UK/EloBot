@@ -2,7 +2,9 @@
 
 const Discord = require('discord.js')
 
-exports.run = async (client, message, args, database) => {
+exports.run = async (client, message, args, database, channels) => {
+
+    if (!channels.admins.includes(message.channel.name)) return;
 
     let adminList = await getAdmins(database)
 
@@ -33,7 +35,7 @@ exports.run = async (client, message, args, database) => {
     // create an embed to show them all
     disputesEmbed = new Discord.RichEmbed()
         .setTitle(`Disputed Games`)
-        .setDescription(`Listed below are all the games that have been disputed by players, use the \`\`!resolve [id]\`\` (e.g. \`\`!resolve 5\`\`) command to be given an option for how to resolve the dispute`)
+        .setDescription(`Listed below are all the games that have been disputed by players, use the command \`\`!resolve [id]\`\` (e.g. \`\`!resolve 5\`\`) command to be given an option for how to resolve the dispute.`)
         .setFooter(`This message brought to you by EloBot - Created by Cepheid`)
         .setTimestamp()
     
@@ -48,7 +50,7 @@ exports.run = async (client, message, args, database) => {
 
         dispute.timestamp
 
-        disputesEmbed.addField(`ID: ${dispute.id}`,`
+        disputesEmbed.addField(`**__ID:__ ${dispute.id}**`,`
             Player 1: ${dispute.player1}
             Player 2: ${dispute.player2}
             Disputer: ${dispute.disputedBy}

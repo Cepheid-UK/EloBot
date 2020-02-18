@@ -1,8 +1,8 @@
-// Help command to show users how it works.
+// Help command to show users how elobot works.
 
-exports.run = async (client, message, args, database) => {
+exports.run = (client, message, args, database, channels) => {
 
-    if (message.channel.name != 'elobot') return;
+    if (!channels.users.includes(message.channel.name)) return;
 
     const embed = {
         "title": "EloBot Ladder",
