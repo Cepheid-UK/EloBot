@@ -117,7 +117,7 @@ exports.run = async (client, message, args, database) => {
 
     await matchMessage.react('🏆')
     await matchMessage.react(kaiserCry)
-    matchMessage.react('🚫')
+    await matchMessage.react('🚫')
 
     let reportingPlayer
     let reportedEmoji
