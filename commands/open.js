@@ -40,11 +40,19 @@ exports.run = async (client, message, args, database, channels) => {
     await database.query({sql: `INSERT INTO open_challenges (discord_id, time_of_challenge) VALUES (:first,:second);`, params: {first: message.author.tag, second: getTheTime()}})
 
     // get all the players from the ladder into an array
-    let players = await database.query({sql: `SELECT * FROM players;`})
-    let ladderPlayers = [];
-    for (i in players.results) {
-        ladderPlayers.push(players.results[i].discord_id)
-    }    
+
+    let ladderPlayers = await getLadderPlayers(database)
+
+    async function getLadderPlayers(database) {
+        let playersQuery = await database.query({sql: `SELECT * FROM players;`})
+        let players = [];
+        for (i in playersQuery.results) {
+            players.push(playersQuery.results[i].discord_id)
+        }
+        return players
+    }
+
+        
 
     // create the challenge embed and send it
     let challengeEmbed = new Discord.RichEmbed()
@@ -70,18 +78,88 @@ exports.run = async (client, message, args, database, channels) => {
 
     challengeMessage.react('✅');
 
+    await getChallengeReaction(challengeMessage, database, challengeFilter)
+
+    async function getChallengeReaction(message, database, filter) {
+
+        let busyPlayers = await getBusyPlayers(database)
+
+        await message.awaitReactions(challengeFilter, {max: 1, time: CHALLENGE_TIMER, errors: ['Timeout']}).then(async collected => {
+
+            // there was a reaction by a player in the ladder
+            
+            // get the user
+            reacter = collected.last().users.last()
+
+            // get the list of all players in active games or have open challenges
+            busyPlayers = await getBusyPlayers(database)
+            ladderPlayers = await getLadderPlayers(database)
+
+            // if the reacter is not one of those players
+            if (!busyPlayers.includes(reacter.tag)) {
+                // if - return the messageReaction
+                challengeAccepted = true;
+                return collected.first()
+            } else {
+                // else - await more reactions
+                let filter = (reaction, user) => {
+                    return reaction.emoji.name === '✅' && // 1. correct reaction
+                    user.id != message.author.id && // 2. not the challenger
+                    ladderPlayers.includes(user.tag) //&& // 3. reacter is part of the ladder
+                    //!busyPlayers.includes(user.tag) // 4. reacter doesn't already have an active game or open challenge
+                }
+                return await getChallengeReaction(message, database, filter)
+            }
+        }).catch(async collected => {
+            // nobody valid accepted the challenge after CHALLENGE_TIMER number of miliseconds (15 minutes)
+            let hadOpenChallengeQuery = await database.query({sql: `SELECT * FROM open_challenges WHERE discord_id='${message.author.tag}'`})
+
+            // if there is no open challenge in the database
+            if (!hadOpenChallengeQuery.results.length === undefined) {
+                // this means the challenge was not cancelled with !close
+                message.channel.send(`Nobody responded to ${message.author}'s open challenge in time`)
+                deleteOpenChallenge(message.author, database)
+            }
+
+            challengeMessage.delete()
+            challengeAccepted = false;
+        })
+
+    }
+
+    // this needs to be a recursive function that returns when a valid reaction is found.
+
+    // await getChallengeReactions(message)
+    // function getChallengeReactions(message)
+        //#1 - make the filter
+        //#2 - message.awaitReactions
+        //#3 - if reaction is valid - return the reaction
+        //#4 - if reaction is not valid - getChallengeReactions(message)
+        //#5 - catch the first awaitReactions on timeout - nobody responded
+    //      
+    //}
+
     // await reactions on the challenge
-    await challengeMessage.awaitReactions(challengeFilter, {max: 1, time: CHALLENGE_TIMER, errors: ['Timeout']}).then(collected => {
+    // await challengeMessage.awaitReactions(challengeFilter, {max: 1, time: CHALLENGE_TIMER, errors: ['Timeout']}).then(collected => {
         
-        reacter = collected.last().users.last()
-        challengeAccepted = true;
-    }).catch(collected => {
+    //     reacter = collected.last().users.last()
         
-        deleteOpenChallenge(message.author, database)
-        message.channel.send(`Nobody responded to ${message.author}'s open challenge in time`)
-        challengeMessage.delete()
-        challengeAccepted = false;
-    })
+    //     let checkChallengeQuery = await database.query({sql: `SELECT * FROM open_challenges WHERE discord_id=${message.author.tag}`})
+
+    //     if (checkChallengeQuery.results.length === undefined) {
+    //         // challenge was cancelled by !close
+    //         console.log(`challenge not found`)
+    //     }
+        
+        
+    //     challengeAccepted = true;
+    // }).catch(collected => {
+        
+    //     deleteOpenChallenge(message.author, database)
+    //     message.channel.send(`Nobody responded to ${message.author}'s open challenge in time`)
+    //     challengeMessage.delete()
+    //     challengeAccepted = false;
+    // })
 
     if (!challengeAccepted) return;
         
