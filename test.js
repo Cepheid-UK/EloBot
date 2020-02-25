@@ -8,14 +8,13 @@ const { MySQL } = require("mysql-promisify")
 const db_auth = require('./db_auth.json')
 
 // channel handling
-const activeChannels = ['elobot', 'elobot-test', 'elobot-admin']
+const activeChannels = ['elobot-test', 'elobot-admin']
 
 const channels = {}
 
 channels.admins = []
 channels.admins.push('elobot-admin')
 channels.users = []
-channels.users.push('elobot')
 channels.users.push('elobot-test')
 
 const database = new MySQL(db_auth)

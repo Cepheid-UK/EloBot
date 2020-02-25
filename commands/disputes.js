@@ -4,15 +4,17 @@ const Discord = require('discord.js')
 
 exports.run = async (client, message, args, database, channels) => {
 
-    if (!channels.admins.includes(message.channel.name)) return;
+    if (!channels.users.includes(message.channel.name)) {
+        console.log(`returned`)
+        return;
+    }
+    
 
     let adminList = await getAdmins(database)
 
     // if not an admin - ignore
-    if (!adminList.includes(message.author.tag)) return
-
-    // if not in the admin channel
-    if (!message.channel.name === `elobot-admin`) return
+    // ENABLE THIS IN LATER VERSIONS, DISABLED FOR TESTING
+    //if (!adminList.includes(message.author.tag)) return
 
     // collect all the disputes from the database
     let disputesQuery = await database.query({sql: `SELECT * FROM disputed_games`})
@@ -38,26 +40,32 @@ exports.run = async (client, message, args, database, channels) => {
         .setDescription(`Listed below are all the games that have been disputed by players, use the command \`\`!resolve [id]\`\` (e.g. \`\`!resolve 5\`\`) command to be given an option for how to resolve the dispute.`)
         .setFooter(`This message brought to you by EloBot - Created by Cepheid`)
         .setTimestamp()
+
+    if (disputes.length === 0) {
+        disputesEmbed.addField(`Disputes`,`There are no currently disputed games`)
+    } else {
+        for (i in disputes) {
+
+            if (i === 10) {
+                message.channel.send(`Resolve some of the disputes above to make space for additional disputes to be shown`)
+                return
+            }
     
-    for (i in disputes) {
-
-        if (i === 10) {
-            message.channel.send(`Resolve some of the disputes above to make space for additional disptues to be shown`)
-            return
+            let dispute = disputes[i]
+    
+            dispute.timestamp
+    
+            disputesEmbed.addField(`**__ID:__ ${dispute.id}**`,`
+                Player 1: ${dispute.player1}
+                Player 2: ${dispute.player2}
+                Disputer: ${dispute.disputedBy}
+                Map: ${dispute.map}
+                Time: ${dispute.timestamp}
+                Reported Player winner: ${dispute.reportedWinner}`)
         }
-
-        let dispute = disputes[i]
-
-        dispute.timestamp
-
-        disputesEmbed.addField(`**__ID:__ ${dispute.id}**`,`
-            Player 1: ${dispute.player1}
-            Player 2: ${dispute.player2}
-            Disputer: ${dispute.disputedBy}
-            Map: ${dispute.map}
-            Time: ${dispute.timestamp}
-            Reported Player winner: ${dispute.reportedWinner}`)
     }
+    
+    
 
     message.channel.send({embed: disputesEmbed})
 
