@@ -3,9 +3,9 @@
 // syntax: "!mod @Cepheid"
 // will take the tag of a mentioned user and add them to the database if they are not already a member. Only executable in 'elobot-admin'
 
-exports.run = async (client, message, args, database) => {
+exports.run = async (client, message, args, database, channels) => {
 
-    if (message.channel.name != 'elobot-admin') return;
+    if (!channels.admins.includes(message.channel.name)) return;
 
     let admins = []
 

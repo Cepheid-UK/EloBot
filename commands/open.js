@@ -4,13 +4,18 @@ const Discord = require('discord.js')
 const Elo = require('../util/calculate_elo')
 
 const CHALLENGE_TIMER = 15 * 60 * 1000; // length of time an open challenge is kept open - set to 10 mins for testing
-const MATCH_TIMER = 5000 //75 * 60 * 1000; // length of time an active game is kept open - set to 1 hour for testing
+const MATCH_TIMER = 75 * 60 * 1000; // length of time an active game is kept open - set to 1 hour for testing
 const WARNING_TIMER = 15 * 1 * 1000; /// length of time for players to respond to the warning message
 const FIRST_SUMMARY_TIMER = 5 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 const SECOND_SUMMARY_TIMER = 5 * 60 * 1000; // length of time to keep the match summary up, in case match dispute resolution
 
+<<<<<<< HEAD
 exports.run = async (client, message, args, database) => {
     if (message.channel.name != 'elobot') return;
+=======
+exports.run = async (client, message, args, database, channels) => {
+    if (!channels.users.includes(message.channel.name)) return;
+>>>>>>> development
 
     const kaiserCry = client.emojis.get("650860898176598037")
     
@@ -40,11 +45,19 @@ exports.run = async (client, message, args, database) => {
     await database.query({sql: `INSERT INTO open_challenges (discord_id, time_of_challenge) VALUES (:first,:second);`, params: {first: message.author.tag, second: getTheTime()}})
 
     // get all the players from the ladder into an array
-    let players = await database.query({sql: `SELECT * FROM players;`})
-    let ladderPlayers = [];
-    for (i in players.results) {
-        ladderPlayers.push(players.results[i].discord_id)
-    }    
+
+    let ladderPlayers = await getLadderPlayers(database)
+
+    async function getLadderPlayers(database) {
+        let playersQuery = await database.query({sql: `SELECT * FROM players;`})
+        let players = [];
+        for (i in playersQuery.results) {
+            players.push(playersQuery.results[i].discord_id)
+        }
+        return players
+    }
+
+        
 
     // create the challenge embed and send it
     let challengeEmbed = new Discord.RichEmbed()
@@ -55,14 +68,12 @@ exports.run = async (client, message, args, database) => {
 
     let challengeMessage = await message.channel.send({embed: challengeEmbed})
 
-    let busyPlayers = await getBusyPlayers(database)
-
     // await reactions on challenge
-    const challengeFilter = (reaction, user) => {
+    let challengeFilter = (reaction, user) => {
         return reaction.emoji.name === '✅' && // 1. correct reaction
         user.id != message.author.id && // 2. not the challenger
-        ladderPlayers.includes(user.tag) && // 3. reacter is part of the ladder
-        !busyPlayers.includes(user.tag) // 4. reacter doesn't already have an active game or open challenge
+        ladderPlayers.includes(user.tag) //&& // 3. reacter is part of the ladder
+        //!busyPlayers.includes(user.tag) // 4. reacter doesn't already have an active game or open challenge
     }
 
     let reacter
@@ -70,18 +81,57 @@ exports.run = async (client, message, args, database) => {
 
     challengeMessage.react('✅');
 
-    // await reactions on the challenge
-    await challengeMessage.awaitReactions(challengeFilter, {max: 1, time: CHALLENGE_TIMER, errors: ['Timeout']}).then(collected => {
-        
-        reacter = collected.last().users.last()
-        challengeAccepted = true;
-    }).catch(collected => {
-        
-        deleteOpenChallenge(message.author, database)
-        message.channel.send(`Nobody responded to ${message.author}'s open challenge in time`)
-        challengeMessage.delete()
-        challengeAccepted = false;
-    })
+    await getChallengeReaction(challengeMessage, database, challengeFilter)
+
+    async function getChallengeReaction(message, database, filter) {
+
+        // recursive function which awaitsReactions on the challenge embed message
+        // whenever there's a reaction from a valid player (i.e. they used !signup)
+        // checks if they are busy in a game or have an open challenge, then discards their reaction if so.
+        // if they aren't, it creates a match.
+
+        await message.awaitReactions(filter, {max: 1, time: CHALLENGE_TIMER, errors: ['Timeout']}).then(async collected => {
+            // there was a reaction by a player in the ladder
+            
+            // get the user
+            reacter = collected.last().users.last()
+
+            // get the list of all players in active games or have open challenges
+            busyPlayers = await getBusyPlayers(database)
+            // get the list of players in the ladder in case anyone did !signup recently
+            ladderPlayers = await getLadderPlayers(database)
+
+            // if the reacter is not busy with an open challenge or an active game
+            if (!busyPlayers.includes(reacter.tag)) {
+                // if - return the messageReaction
+                challengeAccepted = true;
+                return collected.first()
+            } else {
+                // else - await more reactions
+                let newFilter = (reaction, user) => {
+                    return reaction.emoji.name === '✅' && // 1. correct reaction
+                    user.id != message.author.id && // 2. not the challenger
+                    ladderPlayers.includes(user.tag) //&& // 3. reacter is part of the ladder
+                    //!busyPlayers.includes(user.tag) // 4. reacter doesn't already have an active game or open challenge
+                }
+                return await getChallengeReaction(message, database, newFilter)
+            }
+        }).catch(async collected => {
+            // nobody valid accepted the challenge after CHALLENGE_TIMER number of miliseconds (15 minutes)
+            let hadOpenChallengeQuery = await database.query({sql: `SELECT * FROM open_challenges WHERE discord_id='${message.author.tag}'`})
+
+            // if there is no open challenge in the database
+            if (!hadOpenChallengeQuery.results.length === undefined) {
+                // this means the challenge was not cancelled with !close
+                message.channel.send(`Nobody responded to ${message.author}'s open challenge in time`)
+                deleteOpenChallenge(message.author, database)
+            }
+
+            challengeMessage.delete()
+            challengeAccepted = false;
+        })
+
+    }
 
     if (!challengeAccepted) return;
         
@@ -131,7 +181,7 @@ exports.run = async (client, message, args, database) => {
         let lastReaction = collected.last()
         reportingPlayer = lastReaction.users.last().tag
 
-        console.log(lastReaction.emoji.name)
+        console.log(`${lastReaction.emoji.name} by ${reportingPlayer}`)
 
         if (lastReaction.emoji.name === '🚫') {
             // match was cancelled
@@ -164,16 +214,16 @@ exports.run = async (client, message, args, database) => {
                 ['✅','❓'].includes(reaction.emoji.name)
         }
 
-        let disputingUser
-
         summaryMessage.awaitReactions(summaryFilter, {max: 1, time: FIRST_SUMMARY_TIMER, errors: 'Timeout'}).then(collected => {
             if (collected.keyArray().includes('❓')) {
                 // first reaction was ❓
 
-                disputingUser = collected.last().users.last().tag
+                let disputingUser = collected.last().users.last()
+
+                console.log(`${collected.last().emoji.name} by ${disputingUser.tag} - Dispute`)
 
                 // add a record to the disputed games table
-                createDisputedMatchRecord(matchResult, map.results[0].abbreviation, message.author, reacter, disputingUser, database)
+                createDisputedMatchRecord(matchResult, map.results[0].abbreviation, message.author, reacter, disputingUser.tag, database)
 
                 // delete the open games
                 deleteOpenChallenge(message.author, database)
@@ -210,10 +260,12 @@ exports.run = async (client, message, args, database) => {
                     if (collected.keyArray().includes('❓')) {
                         // second reaction was ❓
 
-                        disputingUser = collected.last().users.last().tag
+                        disputingUser = collected.last().users.last()
+
+                        console.log(`${collected.last().emoji.name} by ${disputingUser.tag} - Dispute`)
 
                         // add a record to the disputed games table
-                        createDisputedMatchRecord(matchResult, map.results[0].abbreviation, message.author, reacter, disputingUser, database)
+                        createDisputedMatchRecord(matchResult, map.results[0].abbreviation, message.author, reacter, disputingUser.tag, database)
 
                         // delete the open game
                         deleteOpenChallenge(message.author, database)
@@ -519,7 +571,8 @@ async function getBusyPlayers(database) {
     }
 
     for (i in activeQuery.results) {
-        playerList.push(challengeQuery.results[i].discord_id)
+        playerList.push(activeQuery.results[i].player1)
+        playerList.push(activeQuery.results[i].player2)
     }
 
     return playerList

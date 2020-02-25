@@ -1,8 +1,8 @@
-// signup for the ELO system
+// closes an open challenge
 
-exports.run = async (client, message, args, database) => {
+exports.run = async (client, message, args, database, channels) => {
 
-    if (message.channel.name != 'elobot') return;
+    if (!channels.users.includes(message.channel.name)) return;
     
     let isOpenResults = await database.query({sql: `SELECT * FROM open_challenges WHERE discord_id='${message.author.tag}'`})
 
