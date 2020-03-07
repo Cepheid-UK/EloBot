@@ -151,7 +151,8 @@ exports.run = async (client, message, args, database, channels) => {
             \nIf there is an issue with this game, react with ❓ to have this match flagged for review by an admin.
             \nIf both players wish to cancel the match, they can react with 🚫`)
     challengeMessage.delete()
-    matchMessage = await message.channel.send(`${message.author} vs ${reacter}`,{embed: matchEmbed})
+    
+    let matchMessage = await message.channel.send(`${message.author} vs ${reacter}`,{embed: matchEmbed})
     
     // await reactions for match result
     const matchFilter = (reaction, user) => {
@@ -197,7 +198,7 @@ exports.run = async (client, message, args, database, channels) => {
         let summaryEmbed = await createSummary(matchResult, map.results[0], message, reacter, eloResult)
 
         // remove the old embed
-        matchMessage.delete()
+        //matchMessage.delete()
 
         // send the new embed
         let summaryMessage = await message.channel.send(`${message.author} vs ${reacter}`, {embed: summaryEmbed})
@@ -321,7 +322,8 @@ exports.run = async (client, message, args, database, channels) => {
         deleteActiveGame(message.author.tag, database)
 
         // delete the match embed
-        matchMessage.delete()
+        //matchMessage.delete()
+        matchMessage.clearReactions()
         
     })
 
@@ -330,21 +332,6 @@ exports.run = async (client, message, args, database, channels) => {
 }
 
 async function confirmMatch(matchResult, eloResult, map, author, reacter, database) {
-
-// +--------------------+------------+------+-----+---------+----------------+
-// | Field              | Type       | Null | Key | Default | Extra          |
-// +--------------------+------------+------+-----+---------+----------------+
-// | id                 | bigint(20) | NO   | PRI | NULL    | auto_increment |
-// | gametype           | int(2)     | NO   |     | 1       |                |
-// | player1            | char(128)  | NO   |     | NULL    |                |
-// | player1_newelo     | int(5)     | NO   |     | NULL    |                |
-// | player2            | char(128)  | NO   |     | NULL    |                |
-// | player2_newelo     | int(5)     | NO   |     | NULL    |                |
-// | winner             | int(1)     | NO   |     | NULL    |                |
-// | elo_change         | int(4)     | NO   |     | NULL    |                |
-// | map                | char(4)    | NO   |     | NULL    |                |
-// | time_of_completion | datetime   | NO   |     | NULL    |                |
-// +--------------------+------------+------+-----+---------+----------------+
 
     // id is auto_increment
     // gametype is auto 1
