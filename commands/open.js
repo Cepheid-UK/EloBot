@@ -197,7 +197,7 @@ exports.run = async (client, message, args, database, channels) => {
         let summaryEmbed = await createSummary(matchResult, map.results[0], message, reacter, eloResult)
 
         // remove the old embed
-        matchMessage.delete()
+        //matchMessage.delete()
 
         // send the new embed
         let summaryMessage = await message.channel.send(`${message.author} vs ${reacter}`, {embed: summaryEmbed})
@@ -321,7 +321,8 @@ exports.run = async (client, message, args, database, channels) => {
         deleteActiveGame(message.author.tag, database)
 
         // delete the match embed
-        matchMessage.delete()
+        //matchMessage.delete()
+        matchMessage.clearReactions()
         
     })
 
