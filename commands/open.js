@@ -58,7 +58,7 @@ exports.run = async (client, message, args, database, channels) => {
     let challengeEmbed = new Discord.RichEmbed()
         .setColor('#0099ff')
         .setTitle('Open Challenge')
-        .setDescription(`An open challenge has been issued by **${message.author.username}** please react with :white_check_mark: if you wish to accept this open challenge`)
+        .setDescription(`An open challenge has been issued by ${message.author} please react with :white_check_mark: if you wish to accept this open challenge`)
         .setFooter('This message brought to you by EloBot - Created by Cepheid#6411')
 
     let challengeMessage = await message.channel.send({embed: challengeEmbed})
@@ -122,7 +122,8 @@ exports.run = async (client, message, args, database, channels) => {
                 deleteOpenChallenge(message.author, database)
             }
 
-            challengeMessage.delete()
+            //challengeMessage.delete()
+            challengeMessage.clearReactions()
             challengeAccepted = false;
         })
 
@@ -150,7 +151,8 @@ exports.run = async (client, message, args, database, channels) => {
         .addField(`Report:`,`To report on the result of this match, please indicate whether you won - 🏆 or lost - ${kaiserCry} the match by reacting to this message. 
             \nIf there is an issue with this game, react with ❓ to have this match flagged for review by an admin.
             \nIf both players wish to cancel the match, they can react with 🚫`)
-    challengeMessage.delete()
+    //challengeMessage.delete()
+    challengeMessage.clearReactions()
     
     let matchMessage = await message.channel.send(`${message.author} vs ${reacter}`,{embed: matchEmbed})
     
@@ -165,17 +167,14 @@ exports.run = async (client, message, args, database, channels) => {
     await matchMessage.react(kaiserCry)
     await matchMessage.react('🚫')
 
-    let reportingPlayer
-    let reportedEmoji
-
     let cancelledMatch = false;
 
     await matchMessage.awaitReactions(matchFilter, {max: 1, time: MATCH_TIMER, errors: ['Timeout']}).then(async collected => {
 
-        //if (collected.last().length === undefined) throw err;
+        if (collected.last().length === 0) throw err;
 
         let lastReaction = collected.last()
-        reportingPlayer = lastReaction.users.last().tag
+        let reportingPlayer = lastReaction.users.last().tag
 
         console.log(`${lastReaction.emoji.name} by ${reportingPlayer}`)
 
@@ -199,6 +198,7 @@ exports.run = async (client, message, args, database, channels) => {
 
         // remove the old embed
         //matchMessage.delete()
+        matchMessage.clearReactions()
 
         // send the new embed
         let summaryMessage = await message.channel.send(`${message.author} vs ${reacter}`, {embed: summaryEmbed})
